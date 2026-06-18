@@ -39,7 +39,8 @@ services:
     container_name: sonarr
     volumes:
       - sonarr_config:/config
-      - /mnt/data:/data
+      - /mnt/cifs/media-f:/data
+      - /mnt/cifs/media-e:/archive:ro
     ports:
       - "8989:8989"
     depends_on: [prowlarr]
@@ -50,7 +51,8 @@ services:
     container_name: radarr
     volumes:
       - radarr_config:/config
-      - /mnt/data:/data
+      - /mnt/cifs/media-f:/data
+      - /mnt/cifs/media-e:/archive:ro
     ports:
       - "7878:7878"
     depends_on: [prowlarr]
@@ -61,7 +63,8 @@ services:
     container_name: bazarr
     volumes:
       - bazarr_config:/config
-      - /mnt/data:/data
+      - /mnt/cifs/media-f:/data
+      - /mnt/cifs/media-e:/archive:ro
     ports:
       - "6767:6767"
     depends_on: [sonarr, radarr]
