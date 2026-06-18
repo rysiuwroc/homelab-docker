@@ -40,7 +40,7 @@ services:
     volumes:
       - sonarr_config:/config
       - /mnt/cifs/media-f:/data
-      - /mnt/cifs/media-e:/archive:ro
+      - /mnt/cifs/media-e:/archive
     ports:
       - "8989:8989"
     depends_on: [prowlarr]
@@ -52,7 +52,7 @@ services:
     volumes:
       - radarr_config:/config
       - /mnt/cifs/media-f:/data
-      - /mnt/cifs/media-e:/archive:ro
+      - /mnt/cifs/media-e:/archive
     ports:
       - "7878:7878"
     depends_on: [prowlarr]
@@ -64,7 +64,7 @@ services:
     volumes:
       - bazarr_config:/config
       - /mnt/cifs/media-f:/data
-      - /mnt/cifs/media-e:/archive:ro
+      - /mnt/cifs/media-e:/archive
     ports:
       - "6767:6767"
     depends_on: [sonarr, radarr]
