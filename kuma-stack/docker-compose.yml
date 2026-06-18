@@ -1,0 +1,63 @@
+# kuma-stack — Uptime Kuma + its dedicated read-only docker-socket-proxy.
+# uptime-kuma data in the external 'uptime-kuma' volume; reaches the proxy over the external 'monitoring' net.
+name: kuma-stack
+
+services:
+  uptime-kuma:
+    image: louislam/uptime-kuma:1
+    container_name: uptime-kuma
+    restart: unless-stopped
+    volumes:
+      - uptime-kuma:/app/data
+    ports:
+      - "3001:3001"
+    networks:
+      - default
+      - monitoring
+
+  kuma-dockerproxy:
+    image: tecnativa/docker-socket-proxy
+    container_name: kuma-dockerproxy
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - monitoring
+    environment:
+      CONTAINERS: "1"
+      INFO: "1"
+      VERSION: "1"
+      PING: "1"
+      EVENTS: "1"
+      ALLOW_RESTARTS: "0"
+      ALLOW_STOP: "0"
+      ALLOW_START: "0"
+      AUTH: "0"
+      BUILD: "0"
+      COMMIT: "0"
+      CONFIGS: "0"
+      DISTRIBUTION: "0"
+      EXEC: "0"
+      GRPC: "0"
+      IMAGES: "0"
+      LOG_LEVEL: "info"
+      NETWORKS: "0"
+      NODES: "0"
+      PLUGINS: "0"
+      POST: "0"
+      SECRETS: "0"
+      SERVICES: "0"
+      SESSION: "0"
+      SOCKET_PATH: "/var/run/docker.sock"
+      SWARM: "0"
+      SYSTEM: "0"
+      TASKS: "0"
+      VOLUMES: "0"
+
+networks:
+  monitoring:
+    external: true
+
+volumes:
+  uptime-kuma:
+    external: true

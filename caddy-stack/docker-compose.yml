@@ -1,0 +1,17 @@
+# caddy-stack — public reverse proxy + automatic HTTPS (Let's Encrypt).
+# Fronts seer/seerr.rysiukiewicz.com -> localhost:5055 (jellyseerr) and
+# portainer.rysiukiewicz.com -> localhost:9443 (Portainer).
+# network_mode: host is MANDATORY (binds :80/:443 + ACME, proxies localhost upstreams).
+# Absolute binds so the existing Let's Encrypt certs in ./data are reused (no re-issue).
+name: caddy-stack
+
+services:
+  caddy:
+    image: caddy:2
+    container_name: caddy
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - /home/rysiu/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - /home/rysiu/caddy/data:/data
+      - /home/rysiu/caddy/config:/config
