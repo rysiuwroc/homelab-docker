@@ -26,7 +26,7 @@ services:
       TORRENTING_PORT: "6881"
     volumes:
       - qbittorrent_config:/config
-      - /mnt/data:/data
+      - /mnt/cifs/media-f:/data
     ports:
       - "8080:8080"
       - "6881:6881"
@@ -44,6 +44,6 @@ services:
       TZ: "Europe/Warsaw"
     volumes:
       - nzbget_config:/config
-      - /mnt/data:/data
+      - /mnt/cifs/media-f:/data
     ports:
       - "6789:6789"
