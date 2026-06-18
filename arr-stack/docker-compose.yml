@@ -1,0 +1,67 @@
+# arr control-plane — Sonarr / Radarr / Prowlarr / Bazarr (LinuxServer.io)
+# Media + downloads on the shared /mnt/data ext4 disk → hardlinks + atomic moves, no remote path mappings.
+# Requires: external network `arr_net` and the /mnt/data filesystem to exist on the host.
+name: arr-stack
+
+networks:
+  arr_net:
+    name: arr_net
+    external: true
+
+volumes:
+  prowlarr_config:
+  sonarr_config:
+  radarr_config:
+  bazarr_config:
+
+x-arr-common: &arr-common
+  restart: unless-stopped
+  networks: [arr_net]
+  environment:
+    PUID: "1000"
+    PGID: "1000"
+    UMASK: "022"
+    TZ: "Europe/Warsaw"
+
+services:
+  prowlarr:
+    <<: *arr-common
+    image: lscr.io/linuxserver/prowlarr:latest
+    container_name: prowlarr
+    volumes:
+      - prowlarr_config:/config
+    ports:
+      - "9696:9696"
+
+  sonarr:
+    <<: *arr-common
+    image: lscr.io/linuxserver/sonarr:latest
+    container_name: sonarr
+    volumes:
+      - sonarr_config:/config
+      - /mnt/data:/data
+    ports:
+      - "8989:8989"
+    depends_on: [prowlarr]
+
+  radarr:
+    <<: *arr-common
+    image: lscr.io/linuxserver/radarr:latest
+    container_name: radarr
+    volumes:
+      - radarr_config:/config
+      - /mnt/data:/data
+    ports:
+      - "7878:7878"
+    depends_on: [prowlarr]
+
+  bazarr:
+    <<: *arr-common
+    image: lscr.io/linuxserver/bazarr:latest
+    container_name: bazarr
+    volumes:
+      - bazarr_config:/config
+      - /mnt/data:/data
+    ports:
+      - "6767:6767"
+    depends_on: [sonarr, radarr]

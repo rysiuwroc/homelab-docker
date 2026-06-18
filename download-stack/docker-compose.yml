@@ -1,0 +1,49 @@
+# download clients — qBittorrent + NZBGet (LinuxServer.io)
+# Same /mnt/data mount as the arr stack so downloads + library share one filesystem (hardlinks).
+name: download-stack
+
+networks:
+  arr_net:
+    name: arr_net
+    external: true
+
+volumes:
+  qbittorrent_config:
+  nzbget_config:
+
+services:
+  qbittorrent:
+    image: lscr.io/linuxserver/qbittorrent:latest
+    container_name: qbittorrent
+    restart: unless-stopped
+    networks: [arr_net]
+    environment:
+      PUID: "1000"
+      PGID: "1000"
+      UMASK: "022"
+      TZ: "Europe/Warsaw"
+      WEBUI_PORT: "8080"
+      TORRENTING_PORT: "6881"
+    volumes:
+      - qbittorrent_config:/config
+      - /mnt/data:/data
+    ports:
+      - "8080:8080"
+      - "6881:6881"
+      - "6881:6881/udp"
+
+  nzbget:
+    image: lscr.io/linuxserver/nzbget:latest
+    container_name: nzbget
+    restart: unless-stopped
+    networks: [arr_net]
+    environment:
+      PUID: "1000"
+      PGID: "1000"
+      UMASK: "022"
+      TZ: "Europe/Warsaw"
+    volumes:
+      - nzbget_config:/config
+      - /mnt/data:/data
+    ports:
+      - "6789:6789"
