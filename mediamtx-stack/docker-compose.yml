@@ -1,0 +1,19 @@
+# mediamtx-stack — MediaMTX (was the "nice_panini" container). RTSP/RTMP/HLS/WebRTC/SRT relay.
+# Consumed by Home Assistant (192.168.0.211) for camera streams. Env-only, stateless.
+name: mediamtx-stack
+
+services:
+  mediamtx:
+    image: bluenviron/mediamtx:1.15.5
+    container_name: mediamtx
+    restart: unless-stopped
+    environment:
+      MTX_RTSPTRANSPORTS: "tcp"
+      MTX_WEBRTCADDITIONALHOSTS: "homeassistant.lan"
+    ports:
+      - "1935:1935/tcp"
+      - "8554:8554/tcp"
+      - "8888:8888/tcp"
+      - "8889:8889/tcp"
+      - "8189:8189/udp"
+      - "8890:8890/udp"

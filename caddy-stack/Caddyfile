@@ -1,0 +1,20 @@
+# Authoritative copy lives at /home/rysiu/caddy/Caddyfile on .212 (bound absolute in the compose).
+# This committed copy is documentation; edit the host file to change routing.
+{
+    email rysiuwroc@gmail.com
+}
+
+seer.rysiukiewicz.com, seerr.rysiukiewicz.com {
+    encode zstd gzip
+    reverse_proxy localhost:5055
+}
+
+portainer.rysiukiewicz.com {
+    encode zstd gzip
+    reverse_proxy https://localhost:9443 {
+        transport http {
+            tls_insecure_skip_verify
+        }
+        header_up Host portainer.rysiukiewicz.com
+    }
+}
