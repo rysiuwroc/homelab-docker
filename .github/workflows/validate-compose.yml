@@ -1,0 +1,58 @@
+name: validate-compose
+
+# Lints every stack's compose file so a broken docker-compose.yml can't reach
+# Portainer's git AutoUpdate (which redeploys from main every 5 min).
+# Runs on all pushes/PRs (no path filter) so it's a stable required-status check
+# for branch protection. Secrets normally come from Portainer stack-env; here we
+# inject harmless dummies just so interpolation resolves cleanly.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: validate-compose-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  compose-config:
+    runs-on: ubuntu-latest
+    env:
+      ADGUARD_PASSWORD: ci-dummy
+      CONNECTOR_SLACK_URL: https://ci.invalid/dummy
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: docker compose version
+        run: docker compose version
+
+      - name: Validate every compose file
+        run: |
+          set -uo pipefail
+          mapfile -t files < <(git ls-files '*docker-compose.yml' '*docker-compose.yaml' '*compose.yml' | sort)
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "::error::no compose files found"; exit 1
+          fi
+          echo "Found ${#files[@]} compose file(s):"
+          printf '  %s\n' "${files[@]}"
+          fail=0
+          for f in "${files[@]}"; do
+            echo "::group::$f"
+            if docker compose -f "$f" config --quiet; then
+              echo "ok: $f"
+            else
+              echo "::error file=$f::docker compose config failed for $f"
+              fail=1
+            fi
+            echo "::endgroup::"
+          done
+          if [ "$fail" -ne 0 ]; then
+            echo "::error::one or more compose files are invalid — not safe for AutoUpdate"
+            exit 1
+          fi
+          echo "All ${#files[@]} compose files valid."
