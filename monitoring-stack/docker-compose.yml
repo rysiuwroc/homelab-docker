@@ -121,3 +121,15 @@ services:
       - "ADGUARD_PASSWORD=${ADGUARD_PASSWORD}"
     restart: unless-stopped
     networks: [monitoring]
+
+  blackbox-exporter:
+    image: prom/blackbox-exporter:v0.25.0
+    container_name: blackbox-exporter
+    restart: unless-stopped
+    cap_add:
+      - NET_RAW
+    command:
+      - --config.file=/etc/blackbox_exporter/config.yml
+    volumes:
+      - /home/rysiu/monitoring/blackbox.yml:/etc/blackbox_exporter/config.yml:ro
+    networks: [monitoring]
