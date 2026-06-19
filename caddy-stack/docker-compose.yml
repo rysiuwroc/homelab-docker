@@ -15,3 +15,9 @@ services:
       - /home/rysiu/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
       - /home/rysiu/caddy/data:/data
       - /home/rysiu/caddy/config:/config
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS -o /dev/null http://localhost:2019/config/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s

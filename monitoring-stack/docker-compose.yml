@@ -36,6 +36,12 @@ services:
       - "host.docker.internal:host-gateway"
     restart: unless-stopped
     networks: [monitoring]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:9090/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 
   grafana:
     image: grafana/grafana:12.3.7
@@ -54,6 +60,12 @@ services:
     depends_on: [prometheus]
     restart: unless-stopped
     networks: [monitoring]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS -o /dev/null http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
 
   node-exporter:
     image: prom/node-exporter:v1

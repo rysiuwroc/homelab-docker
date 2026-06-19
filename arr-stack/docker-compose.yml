@@ -32,6 +32,12 @@ services:
       - prowlarr_config:/config
     ports:
       - "9696:9696"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS -o /dev/null http://localhost:9696/ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
 
   sonarr:
     <<: *arr-common
@@ -44,6 +50,12 @@ services:
     ports:
       - "8989:8989"
     depends_on: [prowlarr]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS -o /dev/null http://localhost:8989/ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
 
   radarr:
     <<: *arr-common
@@ -56,6 +68,12 @@ services:
     ports:
       - "7878:7878"
     depends_on: [prowlarr]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS -o /dev/null http://localhost:7878/ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
 
   bazarr:
     <<: *arr-common
@@ -68,3 +86,9 @@ services:
     ports:
       - "6767:6767"
     depends_on: [sonarr, radarr]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS -o /dev/null http://localhost:6767/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s

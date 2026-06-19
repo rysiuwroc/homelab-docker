@@ -31,6 +31,12 @@ services:
       - "8088:8080"
       - "6881:6881"
       - "6881:6881/udp"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS -o /dev/null http://localhost:8080/api/v2/app/version"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 45s
 
   nzbget:
     image: lscr.io/linuxserver/nzbget:latest
@@ -47,3 +53,9 @@ services:
       - /mnt/cifs/media-f:/data
     ports:
       - "6789:6789"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS -o /dev/null http://localhost:6789/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 45s
