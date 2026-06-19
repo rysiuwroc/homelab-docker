@@ -1,0 +1,123 @@
+name: monitoring
+
+networks:
+  monitoring:
+    driver: bridge
+
+volumes:
+  prom-data:
+    external: true
+    name: monitoring_prom-data
+  grafana-data:
+    external: true
+    name: monitoring_grafana-data
+
+x-exportarr: &exportarr
+  image: ghcr.io/onedr0p/exportarr:v2.0.1
+  restart: unless-stopped
+  networks: [monitoring]
+
+services:
+  prometheus:
+    image: prom/prometheus:v3.5.4
+    container_name: prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=180d
+      - --web.enable-lifecycle
+    volumes:
+      - /home/rysiu/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - /home/rysiu/monitoring/secrets/ha_token:/etc/prometheus/ha_token:ro
+      - prom-data:/prometheus
+    ports:
+      - "9090:9090"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+    networks: [monitoring]
+
+  grafana:
+    image: grafana/grafana:12.3.7
+    container_name: grafana
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SERVER_ROOT_URL=http://192.168.0.212:3000
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_ANALYTICS_REPORTING_ENABLED=false
+      - GF_ANALYTICS_CHECK_FOR_UPDATES=false
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - /home/rysiu/monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+    ports:
+      - "3000:3000"
+    depends_on: [prometheus]
+    restart: unless-stopped
+    networks: [monitoring]
+
+  node-exporter:
+    image: prom/node-exporter:v1
+    container_name: node-exporter
+    command:
+      - --path.rootfs=/host
+    network_mode: host
+    pid: host
+    volumes:
+      - "/:/host:ro,rslave"
+    restart: unless-stopped
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.55.1
+    container_name: cadvisor
+    privileged: true
+    devices:
+      - /dev/kmsg
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    restart: unless-stopped
+    networks: [monitoring]
+
+  exportarr-sonarr:
+    <<: *exportarr
+    container_name: exportarr-sonarr
+    command: ["sonarr", "-p", "9707", "-i", "0.0.0.0", "-u", "http://192.168.0.212:8989", "--api-key-file", "/secret/apikey"]
+    volumes:
+      - /home/rysiu/monitoring/secrets/sonarr_apikey:/secret/apikey:ro
+
+  exportarr-radarr:
+    <<: *exportarr
+    container_name: exportarr-radarr
+    command: ["radarr", "-p", "9708", "-i", "0.0.0.0", "-u", "http://192.168.0.212:7878", "--api-key-file", "/secret/apikey"]
+    volumes:
+      - /home/rysiu/monitoring/secrets/radarr_apikey:/secret/apikey:ro
+
+  exportarr-prowlarr:
+    <<: *exportarr
+    container_name: exportarr-prowlarr
+    command: ["prowlarr", "-p", "9709", "-i", "0.0.0.0", "-u", "http://192.168.0.212:9696", "--api-key-file", "/secret/apikey"]
+    volumes:
+      - /home/rysiu/monitoring/secrets/prowlarr_apikey:/secret/apikey:ro
+
+  exportarr-bazarr:
+    <<: *exportarr
+    container_name: exportarr-bazarr
+    command: ["bazarr", "-p", "9710", "-i", "0.0.0.0", "-u", "http://192.168.0.212:6767", "--api-key-file", "/secret/apikey"]
+    volumes:
+      - /home/rysiu/monitoring/secrets/bazarr_apikey:/secret/apikey:ro
+
+  adguard-exporter:
+    image: ebrianne/adguard-exporter:v1.14
+    container_name: adguard-exporter
+    environment:
+      - ADGUARD_PROTOCOL=http
+      - ADGUARD_HOSTNAME=192.168.0.1
+      - ADGUARD_PORT=3001
+      - ADGUARD_USERNAME=admin
+      - ADGUARD_INTERVAL=30s
+      - "ADGUARD_PASSWORD=${ADGUARD_PASSWORD}"
+    restart: unless-stopped
+    networks: [monitoring]
