@@ -34,7 +34,10 @@ jobs:
       - name: Validate every compose file
         run: |
           set -uo pipefail
-          mapfile -t files < <(git ls-files '*docker-compose.yml' '*docker-compose.yaml' '*compose.yml' | sort)
+          mapfile -t files < <(git ls-files \
+            '*docker-compose.yml' '*docker-compose.yaml' \
+            '*/compose.yml' '*/compose.yaml' 'compose.yml' 'compose.yaml' \
+            ':(exclude).github/**' | sort -u)
           if [ ${#files[@]} -eq 0 ]; then
             echo "::error::no compose files found"; exit 1
           fi
