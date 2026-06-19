@@ -1,0 +1,37 @@
+# backrest-stack — Backrest web UI for browsing/restoring the restic repos.
+# https://github.com/garethgeorge/backrest — bundles restic; LAN-only on :9898 behind its own login.
+# Browses BOTH restic repos set up in homelab-backups-restic:
+#   - OVH offsite  : s3:https://s3.waw.io.cloud.ovh.net/homelab-restic  (uses AWS_* env below)
+#   - local-69     : /mnt/cifs/backup/restic  (bind-mounted read-only)
+# Secrets (restic repo password + OVH S3 creds) come from Portainer stack-env, NOT git.
+# In the Backrest UI, add each repo with password ${RESTIC_PASSWORD}; restic reads AWS_* from the env.
+# Browse/restore only — leave the nightly schedule to the .212 cron (restic-backup.sh), so Backrest
+# and the cron never both prune.
+name: backrest-stack
+
+volumes:
+  backrest-config:
+  backrest-data:
+  backrest-cache:
+
+services:
+  backrest:
+    image: garethgeorge/backrest:v1.13.0
+    container_name: backrest
+    restart: unless-stopped
+    environment:
+      BACKREST_DATA: /data
+      BACKREST_CONFIG: /config/config.json
+      XDG_CACHE_HOME: /cache
+      TMPDIR: /tmp
+      TZ: Europe/Warsaw
+      RESTIC_PASSWORD: ${RESTIC_PASSWORD}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+    volumes:
+      - backrest-config:/config
+      - backrest-data:/data
+      - backrest-cache:/cache
+      - /mnt/cifs/backup:/mnt/cifs/backup:ro
+    ports:
+      - "9898:9898"
