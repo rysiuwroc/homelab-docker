@@ -2,7 +2,8 @@
 # Image = the existing local build, retagged to slack-activity-meter:local on .212
 # (snapshot has no registry; retag avoids a rebuild). To rebuild from .69 source later, swap
 # `image:` for `build: .` with the source committed here.
-# The real Slack auth secret is NOT env — it's slack_cookies.json inside the /data bind (preserved).
+# The real Slack auth secret is NOT env — it's slack_cookies.json, bind-mounted from
+# /home/rysiu/slack-meter/slack_cookies.json (refresh there + restart; no container edit).
 name: slack-meter-stack
 
 services:
@@ -21,4 +22,5 @@ services:
       - CONNECTOR_BACKEND_URL=http://127.0.0.1:8080
       - CONNECTOR_SLACK_URL=${CONNECTOR_SLACK_URL}   # secret-ish (workspace/enterprise id) -> Portainer env, not git
     volumes:
-      - /home/rysiu/docker-binds/bind-9c827ed09c48:/data   # 84MB activity.db + slack_cookies.json (auth) — preserve
+      - /home/rysiu/docker-binds/bind-9c827ed09c48:/data   # activity.db + emoji/ + tracked_emails.txt
+      - /home/rysiu/slack-meter/slack_cookies.json:/data/slack_cookies.json   # Slack session auth — REFRESH HERE: overwrite this host file + restart container (no docker exec)
