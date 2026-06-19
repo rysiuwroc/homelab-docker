@@ -32,6 +32,6 @@ services:
       - backrest-config:/config
       - backrest-data:/data
       - backrest-cache:/cache
-      - /mnt/cifs/backup:/mnt/cifs/backup:ro
+      - /mnt/cifs/backup:/mnt/cifs/backup   # rw: restic writes lock files even for read ops
     ports:
       - "9898:9898"
