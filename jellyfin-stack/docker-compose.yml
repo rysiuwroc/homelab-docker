@@ -34,6 +34,9 @@ services:
       # local. Client binary + its config (with the HMAC secret, kept OFF git) live on the host.
       - /home/rysiu/ffmpeg-over-ip/ffmpeg-over-ip-client:/usr/lib/jellyfin-ffmpeg/ffmpeg:ro
       - /home/rysiu/ffmpeg-over-ip/ffmpeg-over-ip.client.jsonc:/usr/lib/jellyfin-ffmpeg/ffmpeg-over-ip.client.jsonc:ro
+      # IPTV Live TV: filtered M3U + EPG (built by the /home/rysiu/iptv/ fetcher on cron from the
+      # Xtream provider, only the categories enabled in categories.list). Jellyfin reads them directly.
+      - /home/rysiu/iptv:/iptv:ro
     ports:
       - "8096:8096"
     healthcheck:
