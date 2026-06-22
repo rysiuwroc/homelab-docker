@@ -1,0 +1,38 @@
+# jellyfin-stack — Jellyfin media server (open-source Plex alternative), LinuxServer.io image
+# (same PUID/UMASK convention as the arr stack). Reads the SAME media as Plex/arr via the
+# existing CIFS mounts, READ-ONLY — Jellyfin never writes to the media (metadata lives in /config).
+# Phase 1 = software transcode. Phase 2 adds GPU offload to .69 via ffmpeg-over-ip (Jellyfin
+# "FFmpeg path" override + a bind-mounted client binary — no structural compose change needed).
+name: jellyfin-stack
+
+networks:
+  arr_net:
+    name: arr_net
+    external: true
+
+volumes:
+  jellyfin_config:
+
+services:
+  jellyfin:
+    image: lscr.io/linuxserver/jellyfin:latest
+    container_name: jellyfin
+    restart: unless-stopped
+    networks: [arr_net]
+    environment:
+      PUID: "1000"
+      PGID: "1000"
+      UMASK: "022"
+      TZ: "Europe/Warsaw"
+    volumes:
+      - jellyfin_config:/config
+      - /mnt/cifs/media-f:/data:ro
+      - /mnt/cifs/media-e:/archive:ro
+    ports:
+      - "8096:8096"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS -o /dev/null http://localhost:8096/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 90s
