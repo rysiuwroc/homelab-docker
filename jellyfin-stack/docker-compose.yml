@@ -12,7 +12,6 @@ networks:
 
 volumes:
   jellyfin_config:
-  threadfin_conf:
 
 services:
   jellyfin:
@@ -34,9 +33,6 @@ services:
       # local. Client binary + its config (with the HMAC secret, kept OFF git) live on the host.
       - /home/rysiu/ffmpeg-over-ip/ffmpeg-over-ip-client:/usr/lib/jellyfin-ffmpeg/ffmpeg:ro
       - /home/rysiu/ffmpeg-over-ip/ffmpeg-over-ip.client.jsonc:/usr/lib/jellyfin-ffmpeg/ffmpeg-over-ip.client.jsonc:ro
-      # IPTV Live TV: filtered M3U + EPG (built by the /home/rysiu/iptv/ fetcher on cron from the
-      # Xtream provider, only the categories enabled in categories.list). Jellyfin reads them directly.
-      - /home/rysiu/iptv:/iptv:ro
     ports:
       - "8096:8096"
     healthcheck:
@@ -45,28 +41,3 @@ services:
       timeout: 10s
       retries: 3
       start_period: 90s
-
-  # Threadfin — IPTV middleware (xTeVe fork): merges the M3U + XMLTV from the Xtream provider,
-  # filters/maps channels, buffers the single upstream connection, and exports a clean M3U +
-  # XMLTV for Jellyfin Live TV (Jellyfin reaches it internally at http://threadfin:34400).
-  threadfin:
-    image: fyb3roptik/threadfin:latest
-    container_name: threadfin
-    restart: unless-stopped
-    networks: [arr_net]
-    environment:
-      PUID: "1000"
-      PGID: "1000"
-      TZ: "Europe/Warsaw"
-    volumes:
-      - threadfin_conf:/home/threadfin/conf
-    tmpfs:
-      - /tmp/threadfin
-    ports:
-      - "34400:34400"
-    healthcheck:
-      test: ["CMD-SHELL", "curl -fsS -o /dev/null http://localhost:34400/web/ || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
