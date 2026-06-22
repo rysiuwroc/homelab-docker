@@ -28,6 +28,11 @@ services:
       - jellyfin_config:/config
       - /mnt/cifs/media-f:/data:ro
       - /mnt/cifs/media-e:/archive:ro
+      # GPU transcode offload (Phase 2): replace the bundled ffmpeg with the ffmpeg-over-ip
+      # client so transcodes run on the RTX 2070 on .69 (server listens :5050). ffprobe stays
+      # local. Client binary + its config (with the HMAC secret, kept OFF git) live on the host.
+      - /home/rysiu/ffmpeg-over-ip/ffmpeg-over-ip-client:/usr/lib/jellyfin-ffmpeg/ffmpeg:ro
+      - /home/rysiu/ffmpeg-over-ip/ffmpeg-over-ip.client.jsonc:/usr/lib/jellyfin-ffmpeg/ffmpeg-over-ip.client.jsonc:ro
     ports:
       - "8096:8096"
     healthcheck:
