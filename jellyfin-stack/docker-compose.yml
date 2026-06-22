@@ -12,6 +12,7 @@ networks:
 
 volumes:
   jellyfin_config:
+  threadfin_conf:
 
 services:
   jellyfin:
@@ -41,3 +42,28 @@ services:
       timeout: 10s
       retries: 3
       start_period: 90s
+
+  # Threadfin — IPTV middleware (xTeVe fork): merges the M3U + XMLTV from the Xtream provider,
+  # filters/maps channels, buffers the single upstream connection, and exports a clean M3U +
+  # XMLTV for Jellyfin Live TV (Jellyfin reaches it internally at http://threadfin:34400).
+  threadfin:
+    image: fyb3roptik/threadfin:latest
+    container_name: threadfin
+    restart: unless-stopped
+    networks: [arr_net]
+    environment:
+      PUID: "1000"
+      PGID: "1000"
+      TZ: "Europe/Warsaw"
+    volumes:
+      - threadfin_conf:/home/threadfin/conf
+    tmpfs:
+      - /tmp/threadfin
+    ports:
+      - "34400:34400"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS -o /dev/null http://localhost:34400/web/ || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
