@@ -1,7 +1,7 @@
 # arr control-plane — Sonarr / Radarr / Prowlarr / Bazarr (LinuxServer.io)
 # Media + downloads on the shared /mnt/data ext4 disk → hardlinks + atomic moves, no remote path mappings.
 # Requires: external network `arr_net` and the /mnt/data filesystem to exist on the host.
-name: arr-stack
+name: arr-stacka
 
 networks:
   arr_net:
