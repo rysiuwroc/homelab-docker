@@ -15,7 +15,9 @@ volumes:
 
 services:
   jellyfin:
-    image: lscr.io/linuxserver/jellyfin:latest
+    # 12.0-rc1 via LSIO unstable tag (was :latest = 10.11.x). ROLLBACK: set back to :10.11.11
+    # and restore the pre-12 DB/config from /home/rysiu/jellyfin-pre12/essentials.tar.gz on .212.
+    image: lscr.io/linuxserver/jellyfin:nightly
     container_name: jellyfin
     restart: unless-stopped
     networks: [arr_net]
