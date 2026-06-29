@@ -8,8 +8,12 @@ services:
     container_name: mediamtx
     restart: unless-stopped
     environment:
+      TZ: "Europe/Warsaw"
       MTX_RTSPTRANSPORTS: "tcp"
       MTX_WEBRTCADDITIONALHOSTS: "homeassistant.lan"
+    volumes:
+      # mediamtx is a scratch image (no tzdata) — mount host zoneinfo so TZ resolves (logs -> CEST)
+      - /usr/share/zoneinfo:/usr/share/zoneinfo:ro
     ports:
       - "1935:1935/tcp"
       - "8554:8554/tcp"
