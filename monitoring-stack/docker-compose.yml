@@ -131,7 +131,7 @@ services:
       - ADGUARD_PORT=3001
       - ADGUARD_USERNAME=admin
       - ADGUARD_INTERVAL=30s
-      - "ADGUARD_PASSWORD=${ADGUARD_PASSWORD}"
+      - "ADGUARD_PASSWORD=${ADGUARD_PASSWORD:?set ADGUARD_PASSWORD in Portainer stack env (monitoring)}"
     restart: unless-stopped
     networks: [monitoring]
 
