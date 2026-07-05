@@ -11,6 +11,7 @@ services:
     image: slack-activity-meter:local
     container_name: slack-activity-meter-app-1
     restart: unless-stopped
+    init: true                 # tini jako PID1 - reapuje zombie chrome-headless (Playwright)
     shm_size: "1gb"            # required for Chromium/Playwright stability
     ports:
       - "8080:8080"
