@@ -24,6 +24,7 @@ services:
     volumes:
       - qbittorrent_config:/config
       - /mnt/cifs/media-f:/data
+      - /mnt/scratch:/scratch  # incomplete downloads -> lokalny NVMe scratch (VHDX na D: .69), trzyma losowe zapisy z dala od CIFS (incydent 2026-07-05)
     ports:
       - "8088:8080"
       - "51413:51413"
