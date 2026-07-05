@@ -1,0 +1,9 @@
+[Unit]
+Description=qBittorrent scratch-disk guard (adjust max_active_downloads by free space on /mnt/scratch)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=rysiu
+ExecStart=/usr/bin/python3 /home/rysiu/qbit-scratch-guard.py

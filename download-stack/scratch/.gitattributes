@@ -1,0 +1,7 @@
+# These files are copied verbatim from / run on Linux hosts (.212) or must
+# stay byte-identical to what's deployed there. Force LF regardless of local
+# core.autocrlf so Windows checkouts never corrupt them.
+qbit-scratch-guard.py text eol=lf
+qbit-scratch-guard.service text eol=lf
+qbit-scratch-guard.timer text eol=lf
+setup-scratch.sh text eol=lf
