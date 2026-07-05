@@ -1,0 +1,36 @@
+# Cleanuparr — queue-cleaner for Sonarr/Radarr + qBittorrent (replaces decluttarr).
+# ALL rule config is web-UI/SQLite (no yaml/env for rules) -> lives in the named volume, NOT in git.
+# Deliberately NO /data or /downloads mount: Queue Cleaner/Seeker only need HTTP to arr+qbit,
+# and omitting the mount makes orphan/unlinked file-deletion structurally impossible.
+# Manual-seeding safety: keep "Download Cleaner" master switch OFF and create NO seeding rules
+# (those are the only paths that can delete a completed/seeding torrent). See KB entry for the
+# full decluttarr->Cleanuparr settings checklist + gaps (remove_unmonitored/remove_bad_files have no equivalent).
+name: cleanuparr-stack
+services:
+  cleanuparr:
+    image: ghcr.io/cleanuparr/cleanuparr:2.9.15
+    container_name: cleanuparr
+    restart: unless-stopped
+    networks: [arr_net]
+    environment:
+      PORT: "11011"
+      PUID: "1000"
+      PGID: "1000"
+      UMASK: "022"
+      TZ: "Europe/Warsaw"
+    volumes:
+      - cleanuparr_config:/config
+    ports:
+      - "11011:11011"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11011/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+volumes:
+  cleanuparr_config:
+networks:
+  arr_net:
+    name: arr_net
+    external: true
