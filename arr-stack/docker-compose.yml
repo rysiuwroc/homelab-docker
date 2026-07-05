@@ -13,6 +13,8 @@ volumes:
   sonarr_config:
   radarr_config:
   bazarr_config:
+  autobrr_config:
+  cleanuparr_config:
 
 x-arr-common: &arr-common
   restart: unless-stopped
@@ -92,3 +94,43 @@ services:
       timeout: 10s
       retries: 3
       start_period: 60s
+
+  # --- arr companions (folded in from separate stacks) ---
+  # autobrr: IRC grabber for PolishTracker -> pushes movies/TV to Radarr/Sonarr (ratio: first-in-swarm).
+  #   Config (config.toml + SQLite) in autobrr_config volume; PT secrets entered in autobrr UI, NOT git.
+  autobrr:
+    image: ghcr.io/autobrr/autobrr:v1.81.0
+    container_name: autobrr
+    restart: unless-stopped
+    user: "1000:1000"
+    networks: [arr_net]
+    environment:
+      TZ: "Europe/Warsaw"
+    volumes:
+      - autobrr_config:/config
+    ports:
+      - "7474:7474"
+
+  # cleanuparr: queue-cleaner (replaces decluttarr). All rule config via web UI/SQLite in the volume.
+  #   NO /data mount on purpose (orphan/unlinked file deletion structurally impossible = seed-safe).
+  cleanuparr:
+    image: ghcr.io/cleanuparr/cleanuparr:2.9.15
+    container_name: cleanuparr
+    restart: unless-stopped
+    networks: [arr_net]
+    environment:
+      PORT: "11011"
+      PUID: "1000"
+      PGID: "1000"
+      UMASK: "022"
+      TZ: "Europe/Warsaw"
+    volumes:
+      - cleanuparr_config:/config
+    ports:
+      - "11011:11011"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11011/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
