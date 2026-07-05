@@ -102,7 +102,7 @@ services:
     image: ghcr.io/autobrr/autobrr:v1.81.0
     container_name: autobrr
     restart: unless-stopped
-    user: "1000:1000"
+    # runs as root (image default): autobrr has no LSIO chown-init, so it must own /config to write config.toml
     networks: [arr_net]
     environment:
       TZ: "Europe/Warsaw"
