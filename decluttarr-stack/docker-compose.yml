@@ -1,0 +1,20 @@
+name: decluttarr-stack
+# Decluttarr V2 - sprzata kolejke pobierania Sonarr/Radarr (stalled/failed/orphan/slow itd.).
+# Sekrety (API keys) NIE sa w gicie - realny config.yaml lezy na hoscie:
+#   /home/rysiu/decluttarr/config.yaml (bind-mount ponizej, mode 600).
+# Edycja regul = edytuj TEN plik na hoscie + restart kontenera (nie GitOps).
+services:
+  decluttarr:
+    image: ghcr.io/manimatter/decluttarr:latest
+    container_name: decluttarr
+    restart: unless-stopped
+    environment:
+      - TZ=Europe/Warsaw
+      - PUID=1000
+      - PGID=1000
+    volumes:
+      - /home/rysiu/decluttarr/config.yaml:/app/config/config.yaml
+    networks: [arr_net]
+networks:
+  arr_net:
+    external: true
