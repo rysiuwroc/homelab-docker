@@ -39,7 +39,7 @@ API          = "http://localhost:8088"        # qBit WebUI (no auth from localho
 FROZEN_TAG   = "scratch-frozen"               # tag applied to guard-paused torrents
 
 # free_gb (must be EXCEEDED, top-down) -> max_active_downloads
-TIERS = [(150, 40), (100, 25), (60, 15), (0, 10)]
+TIERS = [(150, 20), (100, 15), (60, 10), (0, 6)]
 
 OVERFLOW_ON_GB   = 60     # scratch below this -> new torrents go to CIFS
 OVERFLOW_OFF_GB  = 90     # scratch above this -> new torrents back to NVMe scratch
