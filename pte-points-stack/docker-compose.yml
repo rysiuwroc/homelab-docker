@@ -1,0 +1,47 @@
+# pte-points-stack — PolishTracker bonus-point farmer.
+# Seeduje duzo malych, rzadkich, starszych filmow/seriali w dedykowanej kategorii
+# qBit `points` na F: (media-f), seed-only (nie importowane do biblioteki).
+# Skrypt (stdlib-only) montowany z repo; sekrety z Portainer stack env (NIE w gicie).
+name: pte-points-stack
+
+networks:
+  arr_net:
+    name: arr_net
+    external: true
+
+volumes:
+  pte_points_state:
+
+services:
+  pte-points:
+    image: python:3.13-slim
+    container_name: pte-points
+    restart: unless-stopped
+    networks: [arr_net]              # ta sama siec co qbittorrent -> http://qbittorrent:8080 (subnet-whitelist, bez hasla)
+    environment:
+      TZ: "Europe/Warsaw"
+      # --- sekrety: ustaw w Portainer stack env (mandatory, brak -> stack sie nie odpali) ---
+      PTE_API_KEY: "${PTE_API_KEY:?ustaw w Portainer stack env}"
+      PTE_RSSKEY: "${PTE_RSSKEY:?ustaw w Portainer stack env}"
+      # --- integracja qBit ---
+      QBIT_URL: "http://qbittorrent:8080"
+      QBIT_CATEGORY: "points"
+      QBIT_SAVEPATH: "/data/Downloads/torrents/points"   # /data = /mnt/cifs/media-f (F:)
+      # --- polityka doboru (wzor punktow PT) ---
+      BUDGET_GB: "500"                # gorny limit sumy w kategorii points
+      MAX_SIZE_GB: "2"                # tanie per-GB -> maksymalizuje liczbe torrentow (n)
+      MIN_SEEDERS: "1"                # zywe (dociagna sie)
+      MAX_SEEDERS: "3"                # rzadkie -> mnoznik x2 we wzorze (f<3)
+      CATS: "6,7,9,11,12,14"          # Movies HD/SD/UHD + TV HD/SD/UHD
+      # --- throttling (chroni PT przed 429 i CIFS .212->.69 przed sztormem) ---
+      BATCH: "25"                     # max nowych grabow na cykl
+      INTERVAL_MIN: "240"             # cykl co 4h
+      PAGES_PER_CYCLE: "40"           # ile stron katalogu skanowac na cykl
+      PAGE_MIN: "150"                 # pomija najswiezsze (dobrze seedowane, malo rzadkich)
+      PAGE_MAX: "5000"                # pomija pradawne (przewaznie martwe f=0)
+      PAGE_SLEEP_SEC: "1.5"           # odstep miedzy stronami (rate-limit PT)
+      REAP_DEAD_HOURS: "6"            # kasuje martwe (0 seederow) niedociagniete graby (guard REAP tyka tylko `ratio`)
+    volumes:
+      - ./grabber.py:/app/grabber.py:ro
+      - pte_points_state:/state
+    command: ["python", "-u", "/app/grabber.py"]
