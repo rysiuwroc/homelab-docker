@@ -28,14 +28,17 @@ Pętla co `INTERVAL_MIN`:
    (bezczynny seed = cel). guard REAP w scratch-guardzie tyka tylko `ratio`, nie `points`.
 
 Stan (zgrane id + kursor) w wolumenie `pte_points_state:/state`. Skrypt = tylko
-biblioteka standardowa Pythona (obraz `python:3.13-slim`, bez builda).
+biblioteka standardowa Pythona (obraz `python:3.13-slim`, bez builda), **bind-owany
+z hosta** `/home/rysiu/pte-points/grabber.py` (relatywne bind-y repo nie działają w
+git-stackach Portainera). Repo = źródło prawdy; zmiana skryptu = edytuj tu i `scp`
+na host, potem redeploy stacku.
 
 ## Sekrety (NIE w gicie)
 
 `PTE_API_KEY` (Profile → API na pte.nu) i `PTE_RSSKEY` (do URL pobierania) ustaw
-w **Portainer → stack `pte-points` → env**. Compose ma je jako mandatory
-placeholdery (`${...:?}`), więc brak env = stack się nie odpali. Wartości w
-`private/homelab-access.md` bazy wiedzy.
+w **Portainer → stack `pte-points-stack` → env**. Compose ma je jako `${...:-}`
+(nie-mandatory — CI compose-config nie ma tych env), a **twardą walidację wymusza
+`grabber.py`** (`exit(1)` gdy brak). Wartości w `private/homelab-access.md` bazy wiedzy.
 
 ## Strojenie
 

@@ -1,7 +1,8 @@
 # pte-points-stack — PolishTracker bonus-point farmer.
 # Seeduje duzo malych, rzadkich, starszych filmow/seriali w dedykowanej kategorii
 # qBit `points` na F: (media-f), seed-only (nie importowane do biblioteki).
-# Skrypt (stdlib-only) montowany z repo; sekrety z Portainer stack env (NIE w gicie).
+# Skrypt na hoscie /home/rysiu/pte-points/grabber.py (bind absolutny - relatywne bind-y repo
+# NIE dzialaja w git-stackach Portainera; wzorzec jak decluttarr). Sekrety z Portainer stack env.
 name: pte-points-stack
 
 networks:
@@ -43,6 +44,6 @@ services:
       PAGE_SLEEP_SEC: "1.5"           # odstep miedzy stronami (rate-limit PT)
       REAP_STALL_HOURS: "6"           # nuke (z plikami) utkniete niedociagi: stalledDL/metaDL >6h. NIGDY ukonczonych/stalledUP. guard REAP tyka tylko `ratio`
     volumes:
-      - ./grabber.py:/app/grabber.py:ro
+      - /home/rysiu/pte-points/grabber.py:/app/grabber.py:ro   # host bind (patrz naglowek); aktualizacja skryptu = scp na host
       - pte_points_state:/state
     command: ["python", "-u", "/app/grabber.py"]
