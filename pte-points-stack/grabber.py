@@ -43,17 +43,17 @@ CATEGORY = env("QBIT_CATEGORY", "points")
 SAVEPATH = env("QBIT_SAVEPATH", "/data/Downloads/torrents/points")
 BUDGET_GB = float(env("BUDGET_GB", "500"))
 MAX_SIZE_GB = float(env("MAX_SIZE_GB", "2"))
-MIN_SEED = int(env("MIN_SEEDERS", "1"))
-MAX_SEED = int(env("MAX_SEEDERS", "3"))
+MIN_SEED = int(env("MIN_SEEDERS", "2"))          # >=2 realnych seederow -> mniej stalli, wciaz f<3 (x2)
+MAX_SEED = int(env("MAX_SEEDERS", "2"))          # <=2 -> zachowuje mnoznik x2 (f<3) we wzorze
 CATS = [int(x) for x in env("CATS", "6,7,9,11,12,14").split(",") if x.strip()]
-BATCH = int(env("BATCH", "25"))
-INTERVAL = int(env("INTERVAL_MIN", "240")) * 60
+BATCH = int(env("BATCH", "0"))                   # 0 = bez limitu na cykl (dobieraj do budzetu)
+INTERVAL = int(env("INTERVAL_MIN", "15")) * 60   # krotki cykl: reap stalli + top-up wolnego miejsca
 PAGE_MIN = int(env("PAGE_MIN", "150"))
 PAGE_MAX = int(env("PAGE_MAX", "5000"))
-PAGES_PER_CYCLE = int(env("PAGES_PER_CYCLE", "40"))
-REAP_STALL_HOURS = float(env("REAP_STALL_HOURS", "6"))
+PAGES_MAX = int(env("PAGES_MAX", "200"))         # max stron/cykl; crawl konczy gdy uzbiera na budzet
+REAP_STALL_MIN = float(env("REAP_STALL_MIN", "20"))  # nuke utknietych po tylu minutach bezczynnosci
 PAGE_SLEEP = float(env("PAGE_SLEEP_SEC", "1.5"))
-ADD_SLEEP = float(env("ADD_SLEEP_SEC", "2"))
+ADD_SLEEP = float(env("ADD_SLEEP_SEC", "1"))
 STATE_DIR = env("STATE_DIR", "/state")
 API_BASE = env("PTE_API_BASE", "https://api-test.pte.nu/api/v1/torrents")
 DL_BASE = env("PTE_DL_BASE", "https://pte.nu/downrss")
@@ -196,7 +196,7 @@ def points_torrents():
 
 def reap_stalled(torrents):
     """Kasuje (z plikami) niedociagniete graby ktore UTKNELY: stan stalledDL/metaDL
-    i brak aktywnosci dluzej niz REAP_STALL_HOURS. NIGDY nie tyka ukonczonych seedow
+    i brak aktywnosci dluzej niz REAP_STALL_MIN. NIGDY nie tyka ukonczonych seedow
     ani stalledUP (bezczynny seed bez leecherow = nasz cel - zostaje). guard REAP w
     scratch-guardzie tyka tylko kategorie `ratio`, wiec `points` domykamy tutaj."""
     now = time.time()
@@ -205,7 +205,7 @@ def reap_stalled(torrents):
         for t in torrents
         if t.get("state") in ("stalledDL", "metaDL")
         and float(t.get("progress", 0)) < 1.0
-        and (now - int(t.get("last_activity", now))) > REAP_STALL_HOURS * 3600
+        and (now - int(t.get("last_activity", now))) > REAP_STALL_MIN * 60
     ]
     if dead:
         qpost("torrents/delete", {"hashes": "|".join(dead), "deleteFiles": "true"})
@@ -229,9 +229,12 @@ def cycle(state):
         return
 
     grabbed = set(state["grabbed"])
+    needed_gb = BUDGET_GB - cur_gb
     cands = []
+    collected_gb = 0.0
     p = state.get("cursor", PAGE_MIN)
-    for _ in range(PAGES_PER_CYCLE):
+    pages = 0
+    while pages < PAGES_MAX and collected_gb < needed_gb * 1.5:
         try:
             d = pt_page(p)
         except Exception as e:
@@ -247,15 +250,17 @@ def cycle(state):
             if sz > MAX_SIZE_GB * GB or not (MIN_SEED <= sd <= MAX_SEED):
                 continue
             cands.append((score(sz, t.get("added")), tid, sz, str(t.get("name", "?"))))
+            collected_gb += sz / GB
+        pages += 1
         p = p + 1 if p < PAGE_MAX else PAGE_MIN
         time.sleep(PAGE_SLEEP)
     state["cursor"] = p
     cands.sort(reverse=True)
-    log.info("scanned %d pages, %d fresh candidates", PAGES_PER_CYCLE, len(cands))
+    log.info("scanned %d pages, %d candidates (~%.0f GB) for %.0f GB free", pages, len(cands), collected_gb, needed_gb)
 
     added = 0
     for sc, tid, sz, name in cands:
-        if added >= BATCH or cur_gb >= BUDGET_GB:
+        if cur_gb >= BUDGET_GB or (BATCH and added >= BATCH):
             break
         if cur_gb + sz / GB > BUDGET_GB:
             continue  # too big for remaining budget; keep filling with smaller
