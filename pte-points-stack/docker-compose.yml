@@ -20,9 +20,10 @@ services:
     networks: [arr_net]              # ta sama siec co qbittorrent -> http://qbittorrent:8080 (subnet-whitelist, bez hasla)
     environment:
       TZ: "Europe/Warsaw"
-      # --- sekrety: ustaw w Portainer stack env (mandatory, brak -> stack sie nie odpali) ---
-      PTE_API_KEY: "${PTE_API_KEY:?ustaw w Portainer stack env}"
-      PTE_RSSKEY: "${PTE_RSSKEY:?ustaw w Portainer stack env}"
+      # --- sekrety: ustaw w Portainer stack env. Brak -> skrypt konczy exit(1) i restartuje (widoczne w logach).
+      #     (compose-config w CI nie ma tych env, wiec `:-` zamiast `:?` - twarda walidacja jest w grabber.py) ---
+      PTE_API_KEY: "${PTE_API_KEY:-}"
+      PTE_RSSKEY: "${PTE_RSSKEY:-}"
       # --- integracja qBit ---
       QBIT_URL: "http://qbittorrent:8080"
       QBIT_CATEGORY: "points"
