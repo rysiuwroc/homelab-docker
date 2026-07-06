@@ -34,8 +34,8 @@ services:
       RATIO_CATEGORY: "ratio"         # kategoria autobrr trzymana na top
       PRIO_TICK_SEC: "10"             # co ile s wynosic `ratio` na top (lekki call - moze nakurwiac)
       # --- polityka doboru (wzor punktow PT) ---
-      BUDGET_GB: "2000"               # gorny limit sumy w kategorii points; wypelniamy ile fabryka dala
-      MAX_SIZE_GB: "2"                # tanie per-GB -> maksymalizuje liczbe torrentow (n)
+      BUDGET_GB: "1000"               # gorny limit sumy w kategorii points; wypelniamy ile fabryka dala
+      MAX_SIZE_GB: "5"                # tanie per-GB -> maksymalizuje liczbe torrentow (n)
       MIN_SEEDERS: "2"                # >=2 realnych seederow -> mniej stalli (1-seederowe czesto martwe)
       MAX_SEEDERS: "2"                # <=2 -> wciaz f<3 => mnoznik x2 we wzorze
       CATS: "6,7,9,11,12,14"          # Movies HD/SD/UHD + TV HD/SD/UHD
@@ -43,7 +43,7 @@ services:
       BATCH: "0"                      # 0 = bez limitu na cykl
       INTERVAL_MIN: "15"              # co 15 min: reap stalli + top-up wolnego miejsca do budzetu
       PAGES_MAX: "200"                # max stron/cykl; crawl konczy sie gdy uzbiera kandydatow na budzet
-      PAGE_MIN: "1000"                # start kursora glebiej (~2024-2025): wiecej rzadkich+zywych, wyzszy wiek niz swieze 2026
+      PAGE_MIN: "3000"                # start kursora glebiej (~2024-2025): wiecej rzadkich+zywych, wyzszy wiek niz swieze 2026
       PAGE_MAX: "5000"                # pomija pradawne (przewaznie martwe f=0)
       PAGE_SLEEP_SEC: "1.5"           # odstep miedzy stronami (anty-ban: PT zwraca 429)
       ADD_SLEEP_SEC: "1"              # odstep miedzy pobraniami .torrent (anty-ban)
