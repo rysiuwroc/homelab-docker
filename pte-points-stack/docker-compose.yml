@@ -29,6 +29,10 @@ services:
       QBIT_URL: "http://qbittorrent:8080"
       QBIT_CATEGORY: "points"
       QBIT_SAVEPATH: "/data/Downloads/torrents/points"   # /data = /mnt/cifs/media-f (F:)
+      # --- priorytet: `ratio` (autobrr) ZAWSZE na topie kolejki qBit (osobny watek daemon) ---
+      #     qBit wywlaszcza (queuedDL) najnizszy aktywny `points` i puszcza `ratio`. Wymaga Queueing ON w qBit.
+      RATIO_CATEGORY: "ratio"         # kategoria autobrr trzymana na top
+      PRIO_TICK_SEC: "10"             # co ile s wynosic `ratio` na top (lekki call - moze nakurwiac)
       # --- polityka doboru (wzor punktow PT) ---
       BUDGET_GB: "500"                # gorny limit sumy w kategorii points; wypelniamy ile fabryka dala
       MAX_SIZE_GB: "2"                # tanie per-GB -> maksymalizuje liczbe torrentow (n)
@@ -39,7 +43,7 @@ services:
       BATCH: "0"                      # 0 = bez limitu na cykl
       INTERVAL_MIN: "15"              # co 15 min: reap stalli + top-up wolnego miejsca do budzetu
       PAGES_MAX: "200"                # max stron/cykl; crawl konczy sie gdy uzbiera kandydatow na budzet
-      PAGE_MIN: "150"                 # pomija najswiezsze; kursor pelznie ku starszym (wyzszy wiek)
+      PAGE_MIN: "1000"                # start kursora glebiej (~2024-2025): wiecej rzadkich+zywych, wyzszy wiek niz swieze 2026
       PAGE_MAX: "5000"                # pomija pradawne (przewaznie martwe f=0)
       PAGE_SLEEP_SEC: "1.5"           # odstep miedzy stronami (anty-ban: PT zwraca 429)
       ADD_SLEEP_SEC: "1"              # odstep miedzy pobraniami .torrent (anty-ban)

@@ -22,6 +22,7 @@ import io
 import json
 import logging
 import os
+import threading
 import time
 import urllib.error
 import urllib.parse
@@ -48,7 +49,9 @@ MAX_SEED = int(env("MAX_SEEDERS", "2"))          # <=2 -> zachowuje mnoznik x2 (
 CATS = [int(x) for x in env("CATS", "6,7,9,11,12,14").split(",") if x.strip()]
 BATCH = int(env("BATCH", "0"))                   # 0 = bez limitu na cykl (dobieraj do budzetu)
 INTERVAL = int(env("INTERVAL_MIN", "15")) * 60   # krotki cykl: reap stalli + top-up wolnego miejsca
-PAGE_MIN = int(env("PAGE_MIN", "150"))
+RATIO_CATEGORY = env("RATIO_CATEGORY", "ratio")  # kategoria autobrr (swieze release'y) - trzymana na TOPie kolejki
+PRIO_TICK = float(env("PRIO_TICK_SEC", "10"))    # co ile s wynosic `ratio` na top (lekki call - moze nakurwiac)
+PAGE_MIN = int(env("PAGE_MIN", "1000"))          # start kursora glebiej: 2024-2025 (wiecej rzadkich+zywych, wyzszy wiek) niz swieze 2026
 PAGE_MAX = int(env("PAGE_MAX", "5000"))
 PAGES_MAX = int(env("PAGES_MAX", "200"))         # max stron/cykl; crawl konczy gdy uzbiera na budzet
 REAP_STALL_MIN = float(env("REAP_STALL_MIN", "20"))  # nuke utknietych po tylu minutach bezczynnosci
@@ -213,6 +216,41 @@ def reap_stalled(torrents):
     return set(dead)
 
 
+_last_prio_n = -1
+
+
+def enforce_ratio_prio():
+    """`ratio` ZAWSZE na top kolejki qBit: niedociagniete torrenty kategorii `ratio`
+    (autobrr, swieze release'y) wynosimy na gore -> gdy `max_active_downloads` zapcha
+    sie `pointsami`, qBit wywlaszcza (queuedDL) najnizszy aktywny `points` i puszcza
+    `ratio`. Nowe torrenty qBit dodaje na DOL, wiec swiezy `ratio` reaktywnie wynosimy
+    (topPrio jest 'lepki' - raz podniesiony zostaje nad pozniej dodanymi `points`).
+    Wymaga wlaczonego kolejkowania w qBit (Preferences -> Queueing)."""
+    global _last_prio_n
+    if DRY:
+        return
+    body = qget("torrents/info", {"category": RATIO_CATEGORY})
+    tors = json.loads(body.decode("utf-8", "replace")) if body else []
+    hashes = [t["hash"] for t in tors if float(t.get("progress", 1)) < 1.0]
+    if hashes:
+        qpost("torrents/topPrio", {"hashes": "|".join(hashes)})
+    if len(hashes) != _last_prio_n:
+        log.info("prio: %d niedociagnietych `ratio` -> top kolejki", len(hashes))
+        _last_prio_n = len(hashes)
+
+
+def priority_enforcer():
+    """Osobny watek daemon: co PRIO_TICK s wynosi `ratio` na top - niezaleznie od
+    crawla (ktory potrafi trwac minuty). Swiezy release z autobrr wskakuje na gore
+    w <=PRIO_TICK s, nawet w srodku crawla `points`."""
+    while True:
+        try:
+            enforce_ratio_prio()
+        except Exception as e:
+            log.warning("prio enforce failed: %s", e)
+        time.sleep(PRIO_TICK)
+
+
 # ---------------------------------------------------------------- cycle
 def cycle(state):
     if not DRY:
@@ -308,13 +346,15 @@ def main():
         CATS, MAX_SIZE_GB, MIN_SEED, MAX_SEED, BUDGET_GB, BATCH, INTERVAL // 60, DRY,
     )
     state = load_state()
+    if DRY:
+        cycle(state)
+        return
+    threading.Thread(target=priority_enforcer, daemon=True).start()
     while True:
         try:
             cycle(state)
         except Exception as e:
             log.exception("cycle error: %s", e)
-        if DRY:
-            break
         time.sleep(INTERVAL)
 
 
