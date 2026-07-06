@@ -34,8 +34,8 @@ services:
       RATIO_CATEGORY: "ratio"         # kategoria autobrr trzymana na top
       PRIO_TICK_SEC: "10"             # co ile s wynosic `ratio` na top (lekki call - moze nakurwiac)
       # --- polityka doboru (wzor punktow PT) ---
-      BUDGET_GB: "2000"               # gorny limit sumy w kategorii points; wypelniamy ile fabryka dala
-      MAX_SIZE_GB: "2"                # tanie per-GB -> maksymalizuje liczbe torrentow (n)
+      BUDGET_GB: "1000"               # gorny limit sumy w kategorii points; wypelniamy ile fabryka dala
+      MAX_SIZE_GB: "5"                # tanie per-GB -> maksymalizuje liczbe torrentow (n)
       MIN_SEEDERS: "2"                # >=2 realnych seederow -> mniej stalli (1-seederowe czesto martwe)
       MAX_SEEDERS: "2"                # <=2 -> wciaz f<3 => mnoznik x2 we wzorze
       CATS: "6,7,9,11,12,14"          # Movies HD/SD/UHD + TV HD/SD/UHD
