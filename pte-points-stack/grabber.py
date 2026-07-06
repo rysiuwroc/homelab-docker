@@ -51,7 +51,7 @@ INTERVAL = int(env("INTERVAL_MIN", "240")) * 60
 PAGE_MIN = int(env("PAGE_MIN", "150"))
 PAGE_MAX = int(env("PAGE_MAX", "5000"))
 PAGES_PER_CYCLE = int(env("PAGES_PER_CYCLE", "40"))
-REAP_DEAD_HOURS = float(env("REAP_DEAD_HOURS", "6"))
+REAP_STALL_HOURS = float(env("REAP_STALL_HOURS", "6"))
 PAGE_SLEEP = float(env("PAGE_SLEEP_SEC", "1.5"))
 ADD_SLEEP = float(env("ADD_SLEEP_SEC", "2"))
 STATE_DIR = env("STATE_DIR", "/state")
@@ -194,20 +194,22 @@ def points_torrents():
     return json.loads(body.decode("utf-8", "replace")) if body else []
 
 
-def reap_dead(torrents):
-    """Usuwa (z plikami) niedociagniete graby ktore maja 0 seederow w swarmie
-    dluzej niz REAP_DEAD_HOURS - martwe, nigdy sie nie dociagna, zajmuja scratch."""
+def reap_stalled(torrents):
+    """Kasuje (z plikami) niedociagniete graby ktore UTKNELY: stan stalledDL/metaDL
+    i brak aktywnosci dluzej niz REAP_STALL_HOURS. NIGDY nie tyka ukonczonych seedow
+    ani stalledUP (bezczynny seed bez leecherow = nasz cel - zostaje). guard REAP w
+    scratch-guardzie tyka tylko kategorie `ratio`, wiec `points` domykamy tutaj."""
     now = time.time()
     dead = [
         t["hash"]
         for t in torrents
-        if float(t.get("progress", 0)) < 1.0
-        and int(t.get("num_complete", -1)) == 0
-        and (now - int(t.get("added_on", now))) > REAP_DEAD_HOURS * 3600
+        if t.get("state") in ("stalledDL", "metaDL")
+        and float(t.get("progress", 0)) < 1.0
+        and (now - int(t.get("last_activity", now))) > REAP_STALL_HOURS * 3600
     ]
     if dead:
         qpost("torrents/delete", {"hashes": "|".join(dead), "deleteFiles": "true"})
-        log.info("reaped %d dead (0-seed) points torrents", len(dead))
+        log.info("reaped %d stalled points torrents", len(dead))
     return set(dead)
 
 
@@ -216,7 +218,7 @@ def cycle(state):
     if not DRY:
         ensure_category()
         tors = points_torrents()
-        reaped = reap_dead(tors)
+        reaped = reap_stalled(tors)
         tors = [t for t in tors if t["hash"] not in reaped]
         cur_gb = sum(int(t.get("size", 0)) for t in tors) / GB
     else:

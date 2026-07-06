@@ -23,8 +23,9 @@ Pętla co `INTERVAL_MIN`:
 4. pobiera `.torrent` (`pte.nu/downrss/{rsskey}/{id}`) i dodaje do qBit
    (`qbittorrent:8080`, subnet-whitelist → bez hasła) w kategorii `points`,
    savepath na F:, do `BUDGET_GB`, max `BATCH` na cykl;
-5. reapuje martwe (0 seederów w swarmie) niedociągnięte graby po `REAP_DEAD_HOURS`
-   (guard REAP w scratch-guardzie tyka tylko kategorię `ratio`, nie `points`).
+5. nuke'uje (z plikami) **utknięte** niedociągnięte graby (`stalledDL`/`metaDL`,
+   brak aktywności > `REAP_STALL_HOURS`) — nigdy ukończonych seedów ani `stalledUP`
+   (bezczynny seed = cel). guard REAP w scratch-guardzie tyka tylko `ratio`, nie `points`.
 
 Stan (zgrane id + kursor) w wolumenie `pte_points_state:/state`. Skrypt = tylko
 biblioteka standardowa Pythona (obraz `python:3.13-slim`, bez builda).
@@ -40,5 +41,5 @@ placeholdery (`${...:?}`), więc brak env = stack się nie odpali. Wartości w
 
 Wszystko przez env w compose/Portainer: `BUDGET_GB`, `MAX_SIZE_GB`,
 `MIN_SEEDERS`/`MAX_SEEDERS`, `CATS`, `BATCH`, `INTERVAL_MIN`, `PAGE_MIN/MAX`,
-`PAGES_PER_CYCLE`, `PAGE_SLEEP_SEC`, `REAP_DEAD_HOURS`. `DRY_RUN=1` = tylko
+`PAGES_PER_CYCLE`, `PAGE_SLEEP_SEC`, `REAP_STALL_HOURS`. `DRY_RUN=1` = tylko
 loguje co by dodał (bez qBit).

@@ -40,7 +40,7 @@ services:
       PAGE_MIN: "150"                 # pomija najswiezsze (dobrze seedowane, malo rzadkich)
       PAGE_MAX: "5000"                # pomija pradawne (przewaznie martwe f=0)
       PAGE_SLEEP_SEC: "1.5"           # odstep miedzy stronami (rate-limit PT)
-      REAP_DEAD_HOURS: "6"            # kasuje martwe (0 seederow) niedociagniete graby (guard REAP tyka tylko `ratio`)
+      REAP_STALL_HOURS: "6"           # nuke (z plikami) utkniete niedociagi: stalledDL/metaDL >6h. NIGDY ukonczonych/stalledUP. guard REAP tyka tylko `ratio`
     volumes:
       - ./grabber.py:/app/grabber.py:ro
       - pte_points_state:/state
