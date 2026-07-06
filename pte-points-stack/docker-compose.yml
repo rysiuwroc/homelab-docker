@@ -30,19 +30,20 @@ services:
       QBIT_CATEGORY: "points"
       QBIT_SAVEPATH: "/data/Downloads/torrents/points"   # /data = /mnt/cifs/media-f (F:)
       # --- polityka doboru (wzor punktow PT) ---
-      BUDGET_GB: "500"                # gorny limit sumy w kategorii points
+      BUDGET_GB: "500"                # gorny limit sumy w kategorii points; wypelniamy ile fabryka dala
       MAX_SIZE_GB: "2"                # tanie per-GB -> maksymalizuje liczbe torrentow (n)
-      MIN_SEEDERS: "1"                # zywe (dociagna sie)
-      MAX_SEEDERS: "3"                # rzadkie -> mnoznik x2 we wzorze (f<3)
+      MIN_SEEDERS: "2"                # >=2 realnych seederow -> mniej stalli (1-seederowe czesto martwe)
+      MAX_SEEDERS: "2"                # <=2 -> wciaz f<3 => mnoznik x2 we wzorze
       CATS: "6,7,9,11,12,14"          # Movies HD/SD/UHD + TV HD/SD/UHD
-      # --- throttling (chroni PT przed 429 i CIFS .212->.69 przed sztormem) ---
-      BATCH: "25"                     # max nowych grabow na cykl
-      INTERVAL_MIN: "240"             # cykl co 4h
-      PAGES_PER_CYCLE: "40"           # ile stron katalogu skanowac na cykl
-      PAGE_MIN: "150"                 # pomija najswiezsze (dobrze seedowane, malo rzadkich)
+      # --- tempo: bez sztucznego dlawienia; dobieraj do budzetu, uzupelniaj gdy stalle zwolnia miejsce ---
+      BATCH: "0"                      # 0 = bez limitu na cykl
+      INTERVAL_MIN: "15"              # co 15 min: reap stalli + top-up wolnego miejsca do budzetu
+      PAGES_MAX: "200"                # max stron/cykl; crawl konczy sie gdy uzbiera kandydatow na budzet
+      PAGE_MIN: "150"                 # pomija najswiezsze; kursor pelznie ku starszym (wyzszy wiek)
       PAGE_MAX: "5000"                # pomija pradawne (przewaznie martwe f=0)
-      PAGE_SLEEP_SEC: "1.5"           # odstep miedzy stronami (rate-limit PT)
-      REAP_STALL_HOURS: "6"           # nuke (z plikami) utkniete niedociagi: stalledDL/metaDL >6h. NIGDY ukonczonych/stalledUP. guard REAP tyka tylko `ratio`
+      PAGE_SLEEP_SEC: "1.5"           # odstep miedzy stronami (anty-ban: PT zwraca 429)
+      ADD_SLEEP_SEC: "1"              # odstep miedzy pobraniami .torrent (anty-ban)
+      REAP_STALL_MIN: "20"            # nuke (z plikami) utknietych: stalledDL/metaDL bezczynne >20min. NIGDY ukonczonych/stalledUP. guard REAP tyka tylko `ratio`
     volumes:
       - /home/rysiu/pte-points/grabber.py:/app/grabber.py:ro   # host bind (patrz naglowek); aktualizacja skryptu = scp na host
       - pte_points_state:/state
