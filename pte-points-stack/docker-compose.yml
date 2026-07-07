@@ -1,6 +1,7 @@
 # pte-points-stack — PolishTracker bonus-point farmer.
-# Seeduje duzo malych, rzadkich, starszych filmow/seriali w dedykowanej kategorii
-# qBit `points` na F: (media-f), seed-only (nie importowane do biblioteki).
+# Seeduje duzo malych, rzadkich, starszych torrentow filmowych ORAZ gier/konsol (heterogeniczne
+# rozmiary) w dedykowanej kategorii qBit `points` na F: (media-f), seed-only (nie importowane do biblioteki).
+# Zakres stron crawlu, prog score i min-size per kategoria sa SAMOSTROJACE (uczone w runtime) - brak env pokretel.
 # Skrypt na hoscie /home/rysiu/pte-points/grabber.py (bind absolutny - relatywne bind-y repo
 # NIE dzialaja w git-stackach Portainera; wzorzec jak decluttarr). Sekrety z Portainer stack env.
 name: pte-points-stack
@@ -33,19 +34,13 @@ services:
       #     qBit wywlaszcza (queuedDL) najnizszy aktywny `points` i puszcza `ratio`. Wymaga Queueing ON w qBit.
       RATIO_CATEGORY: "ratio"         # kategoria autobrr trzymana na top
       PRIO_TICK_SEC: "10"             # co ile s wynosic `ratio` na top (lekki call - moze nakurwiac)
-      # --- polityka doboru (wzor punktow PT) ---
-      BUDGET_GB: "1000"               # gorny limit sumy w kategorii points; wypelniamy ile fabryka dala
-      MAX_SIZE_GB: "5"                # tanie per-GB -> maksymalizuje liczbe torrentow (n)
-      MIN_SEEDERS: "2"                # >=2 realnych seederow -> mniej stalli (1-seederowe czesto martwe)
-      MAX_SEEDERS: "2"                # <=2 -> wciaz f<3 => mnoznik x2 we wzorze
-      CATS: "6,7,9,11,12,14"          # Movies HD/SD/UHD + TV HD/SD/UHD
-      # --- tempo: bez sztucznego dlawienia; dobieraj do budzetu, uzupelniaj gdy stalle zwolnia miejsce ---
-      BATCH: "0"                      # 0 = bez limitu na cykl
+      # --- polityka doboru: SAMOSTROJACA (crawl, prog score, min-size per kat auto) ---
+      BUDGET_GB: "2000"               # jedyny twardy limit: suma GB w kategorii points
+      MIN_SEEDERS: "2"                # dolny prog zywotnosci (>=tyle seederow zeby sie dociagnelo)
+      CATS: "6,7,9,11,12,14"          # kategorie do farmienia (filmy + gry/konsole - rozne rozmiary)
+      # --- tempo: cykl + opoznienia anty-ban (crawl/prog score/min-size sa samostrojace) ---
       INTERVAL_MIN: "15"              # co 15 min: reap stalli + top-up wolnego miejsca do budzetu
-      PAGES_MAX: "200"                # max stron/cykl; crawl konczy sie gdy uzbiera kandydatow na budzet
-      PAGE_MIN: "3000"                # start kursora glebiej (~2024-2025): wiecej rzadkich+zywych, wyzszy wiek niz swieze 2026
-      PAGE_MAX: "5000"                # pomija pradawne (przewaznie martwe f=0)
-      PAGE_SLEEP_SEC: "1.5"           # odstep miedzy stronami (anty-ban: PT zwraca 429)
+      PAGE_SLEEP_SEC: "1.5"           # poczatkowe/dolne opoznienie miedzy requestami; limiter uczy sie z 429
       ADD_SLEEP_SEC: "1"              # odstep miedzy pobraniami .torrent (anty-ban)
       REAP_STALL_MIN: "20"            # nuke (z plikami) utknietych: stalledDL/metaDL bezczynne >20min. NIGDY ukonczonych/stalledUP. guard REAP tyka tylko `ratio`
     volumes:
