@@ -18,15 +18,19 @@ Mechanisms (keyed off scratch free space + torrent state):
                  and free space fastest. Tagged + auto-resumed when space recovers.
   4. REAP     -> DELETE (with files) dead stalled 'ratio' downloads: category 'ratio' +
                  stalled/metaDL + progress<100% + num_seeds==0 (no source, can NEVER finish)
-                 + inactive > REAP_STALL_HOURS. This is the ONLY delete the guard does, and it
-                 is deliberately narrow: never arr categories (Cleanuparr handles those), never
-                 a torrent that has seeders or is a completed seed. autobrr grabs on NEW IRC
-                 announces (never re-scans), so reaped dead torrents do NOT get re-pulled.
+                 + inactive > REAP_STALL_HOURS. Deliberately narrow: never arr categories
+                 (Cleanuparr handles those), never a torrent that has seeders or is a completed
+                 seed. autobrr grabs on NEW IRC announces (never re-scans), so reaped dead
+                 torrents do NOT get re-pulled.
+  5. REAP-ORPHAN -> DELETE scratch /incomplete dirs matching NO live torrent (torrent removed
+                 but temp data left, or stray leftover), older than ORPHAN_GRACE_HOURS.
+                 Directories only; never a dir any torrent content_path points into.
 
 TUNING: edit the constants below; no restart needed (next 60s tick picks them up).
 TEST/OPS HOOKS:
   SCRATCH_GUARD_TEST_FREE_GB=<n>  -> pretend free space is n GB (test tiers/overflow/freeze).
   SCRATCH_GUARD_REAP_HOURS=<n>    -> override reap age this run (e.g. =1 for an immediate sweep).
+  SCRATCH_GUARD_ORPHAN_GRACE_HOURS=<n> -> override orphan-reap grace this run.
 """
 import json
 import logging
@@ -45,6 +49,8 @@ SCRATCH_TEMP = "/scratch/incomplete"          # qBit (container) incomplete path
 CIFS_TEMP    = "/data/Downloads/incomplete"   # qBit (container) overflow path on CIFS (17 TB)
 API          = "http://localhost:8088"        # qBit WebUI (no auth from localhost)
 FROZEN_TAG   = "scratch-frozen"               # tag applied to guard-paused torrents
+SCRATCH_INC_HOST = "/mnt/scratch/incomplete"  # host path of the container's /scratch/incomplete
+ORPHAN_GRACE_HOURS = float(os.environ.get("SCRATCH_GUARD_ORPHAN_GRACE_HOURS", "24"))  # age before reaping untracked scratch dirs
 
 # free_gb (must be EXCEEDED, top-down) -> max_active_downloads
 TIERS = [(150, 20), (100, 15), (60, 10), (0, 6)]
@@ -114,6 +120,17 @@ def has_tag(t, tag):
     return tag in [x.strip() for x in (t.get("tags") or "").split(",")]
 
 
+def dir_size(p):
+    total = 0
+    for root, _, files in os.walk(p):
+        for f in files:
+            try:
+                total += os.path.getsize(os.path.join(root, f))
+            except OSError:
+                pass
+    return total
+
+
 def main():
     lg = setup_logging()
     try:
@@ -176,6 +193,33 @@ def main():
             api_post("/api/v2/torrents/delete", {"hashes": "|".join(dead), "deleteFiles": "true"})
             action = (action + " | " if action else "") + \
                 "reaped %d dead stalled %s (0 seeds, >%.1fh)" % (len(dead), REAP_CATEGORY, REAP_STALL_HOURS)
+
+        # 5. REAP-ORPHAN: scratch incomplete dirs that no live torrent points into (torrent
+        #    deleted but temp data left, or stray leftover). Only directories, only older than
+        #    ORPHAN_GRACE_HOURS, matched by content_path basename. `live` includes ANY torrent
+        #    whose content_path is under /scratch/incomplete/ (downloading, stuck-completed, or
+        #    mid-move), so the reaper never deletes data a torrent still references.
+        try:
+            live = {os.path.basename((t.get("content_path") or "").rstrip("/"))
+                    for t in tor if (t.get("content_path") or "").startswith(SCRATCH_TEMP + "/")}
+            reaped = 0
+            reaped_gb = 0.0
+            for name in os.listdir(SCRATCH_INC_HOST):
+                p = os.path.join(SCRATCH_INC_HOST, name)
+                if name in live or name == "lost+found" or not os.path.isdir(p):
+                    continue
+                if (now - os.path.getmtime(p)) < ORPHAN_GRACE_HOURS * 3600:
+                    continue
+                sz = dir_size(p)
+                shutil.rmtree(p, ignore_errors=True)
+                reaped += 1
+                reaped_gb += sz / 1e9
+                lg.warning("reaped orphan scratch dir %.1fGB %s (no live torrent, >%.0fh)",
+                           sz / 1e9, name[:60], ORPHAN_GRACE_HOURS)
+            if reaped:
+                action = (action + " | " if action else "") + "reaped %d orphan dirs %.1fGB" % (reaped, reaped_gb)
+        except Exception:
+            lg.exception("orphan reap failed")
 
         lg.info("free=%.1fGB max_dl=%d temp=%s%s", fg, want_dl,
                 "CIFS-overflow" if want_temp == CIFS_TEMP else "scratch",
