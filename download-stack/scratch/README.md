@@ -70,9 +70,12 @@ Run in order:
 
 ## What the guard does (`qbit-scratch-guard.py`, runs every 60s via the timer)
 
-All decisions are keyed off free space on `/mnt/scratch`. **It never deletes
-torrents or data** — pressure is relieved only by throttling, redirecting new
-downloads elsewhere, or pausing (never removing) the least-complete ones.
+All decisions are keyed off free space on `/mnt/scratch`. Pressure is relieved
+first by throttling, redirecting new downloads elsewhere, or pausing (never
+removing) the least-complete ones — it **never touches seeding or recoverable
+data**. The only deletes are two deliberately narrow reapers (below): dead
+sourceless downloads that can never finish, and untracked scratch dirs that no
+torrent references.
 
 - **Tiers** (`max_active_downloads`, by free space): `>150GB` → 40 concurrent,
   `100–150GB` → 25, `60–100GB` → 15, `<60GB` → 10. Maximizes throughput when
@@ -87,6 +90,14 @@ downloads elsewhere, or pausing (never removing) the least-complete ones.
   downloaders are tagged `scratch-frozen` and paused (not deleted), keeping
   only the 3 closest-to-finishing torrents actively draining space. Frozen
   torrents auto-resume (tag removed) once free space recovers above 90GB.
+- **Reap (dead downloads)**: a stalled `ratio`-category torrent that is
+  incomplete with 0 seeds (no source — can never finish) and inactive beyond
+  `REAP_STALL_HOURS` (6h) is deleted with its files. Never arr categories
+  (Cleanuparr owns those), never anything with seeders or a completed seed.
+- **Reap-orphan**: a `/scratch/incomplete` directory matching NO live torrent's
+  `content_path` (torrent removed but temp data left, or a stray leftover) and
+  older than `ORPHAN_GRACE_HOURS` (24h) is deleted. Directories only; a dir any
+  torrent still references is always protected.
 - Any error (qBit API down, disk unreadable, transient) is logged and
   swallowed — the script always exits 0 so the systemd timer never
   accumulates failed-unit state; it just self-heals on the next 60s tick.
