@@ -32,12 +32,12 @@ sudo stat -c '%a %U:%G %n' /opt/github-runner-pool/secrets/github-runner-api-tok
 
 The file must contain exactly the PAT on one line. Do not put the PAT in Git, Portainer stack environment, shell command history, or logs.
 
-Before the first deployment, provision the ten host-visible runner roots. They must exist before Docker starts the containers because the Compose bind mounts intentionally refuse to create missing paths:
+Before the first deployment, provision the ten host-visible runner roots. They must exist before Docker starts the containers because the Compose bind mounts intentionally refuse to create missing paths. Keep the roots private; the entrypoint changes each root to the container's dedicated `runner` UID and rejects symlinked work/cache paths before any root-owned setup:
 
 ```bash
-sudo install -d -o 1001 -g 1001 -m 0755 /opt/github-runner-pool/runners
+sudo install -d -o root -g root -m 0700 /opt/github-runner-pool/runners
 for runner in $(seq -w 1 10); do
-  sudo install -d -o 1001 -g 1001 -m 0755 "/opt/github-runner-pool/runners/$runner"
+  sudo install -d -o root -g root -m 0700 "/opt/github-runner-pool/runners/$runner"
 done
 ```
 
