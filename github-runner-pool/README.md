@@ -1,14 +1,19 @@
 # GitHub Actions runner pool
 
-This stack runs exactly five organization-scoped, universal GitHub Actions runners on the Ubuntu Docker host `192.168.0.212`:
+This stack runs exactly ten organization-scoped, universal GitHub Actions runners on the Ubuntu Docker host `192.168.0.212`:
 
-| Container | GitHub runner | Persistent volumes |
+| Container | GitHub runner | Persistent host root |
 | --- | --- | --- |
-| `github-runner-01` | `ci-linux-01` | `work`, `config`, `tool-cache` |
-| `github-runner-02` | `ci-linux-02` | `work`, `config`, `tool-cache` |
-| `github-runner-03` | `ci-linux-03` | `work`, `config`, `tool-cache` |
-| `github-runner-04` | `ci-linux-04` | `work`, `config`, `tool-cache` |
-| `github-runner-05` | `ci-linux-05` | `work`, `config`, `tool-cache` |
+| `github-runner-01` | `ci-linux-01` | `/opt/github-runner-pool/runners/01` |
+| `github-runner-02` | `ci-linux-02` | `/opt/github-runner-pool/runners/02` |
+| `github-runner-03` | `ci-linux-03` | `/opt/github-runner-pool/runners/03` |
+| `github-runner-04` | `ci-linux-04` | `/opt/github-runner-pool/runners/04` |
+| `github-runner-05` | `ci-linux-05` | `/opt/github-runner-pool/runners/05` |
+| `github-runner-06` | `ci-linux-06` | `/opt/github-runner-pool/runners/06` |
+| `github-runner-07` | `ci-linux-07` | `/opt/github-runner-pool/runners/07` |
+| `github-runner-08` | `ci-linux-08` | `/opt/github-runner-pool/runners/08` |
+| `github-runner-09` | `ci-linux-09` | `/opt/github-runner-pool/runners/09` |
+| `github-runner-10` | `ci-linux-10` | `/opt/github-runner-pool/runners/10` |
 
 All runners are in the `MRysiukiewicz` organization and `linux-docker-ci` group, with labels `self-hosted`, `linux`, `x64`, and `docker`. Jobs run as the unprivileged `runner` user. The host Docker socket is used for job containers; Docker-in-Docker is intentionally not used.
 
@@ -27,6 +32,15 @@ sudo stat -c '%a %U:%G %n' /opt/github-runner-pool/secrets/github-runner-api-tok
 
 The file must contain exactly the PAT on one line. Do not put the PAT in Git, Portainer stack environment, shell command history, or logs.
 
+Before the first deployment, provision the ten host-visible runner roots. They must exist before Docker starts the containers because the Compose bind mounts intentionally refuse to create missing paths:
+
+```bash
+sudo install -d -o 1001 -g 1001 -m 0755 /opt/github-runner-pool/runners
+for runner in $(seq -w 1 10); do
+  sudo install -d -o 1001 -g 1001 -m 0755 "/opt/github-runner-pool/runners/$runner"
+done
+```
+
 ## Portainer Git-stack deployment
 
 1. Copy `.env.example` to a deployment-host `.env` file and set `RUNNER_SHA256` to the 64-hex SHA-256 published for the exact `RUNNER_VERSION` release. Before the first deployment and every runner-version update, build the pinned image on the Docker host:
@@ -37,7 +51,7 @@ The file must contain exactly the PAT on one line. Do not put the PAT in Git, Po
 2. Set `DOCKER_GID` to the host socket group ID (`stat -c '%g' /var/run/docker.sock`). Keep the host secret path in `GITHUB_RUNNER_API_TOKEN_FILE`.
 3. In Portainer, choose **Stacks → Add stack → Git repository**, select this repository and the `github-runner-pool/docker-compose.yml` compose path, and name the stack `github-runner-pool`.
 4. Add the non-secret values from `.env` to the Portainer stack environment. Do not add a PAT value. The compose file bind-mounts the host file read-only at `/run/secrets/github-runner-api-token`.
-5. Deploy the stack and confirm all five services register and become healthy. The image contains only the pinned runner and general Linux CI tooling; Node, .NET, Java, Go, and Rust SDKs are deliberately absent.
+5. Deploy the stack and confirm all ten services register and become healthy. Each host root keeps that runner's installation, work directory, action runtime, and tool cache at the same absolute path that the host Docker daemon sees for job and service containers. The image contains only the pinned runner and general Linux CI tooling; Node, .NET, Java, Go, and Rust SDKs are deliberately absent.
 
 For CI interpolation checks, use the token-free example (the placeholder checksum is only a config-time value; it is not a usable image build):
 
@@ -57,7 +71,7 @@ docker compose --env-file .env -f docker-compose.yml ps
 docker inspect --format '{{json .State.Health}}' github-runner-01
 ```
 
-A healthy container has a live runner process and `/run/runner-ready`. On `TERM`, the entrypoint stops the runner, requests a short-lived removal token internally, and deregisters it. The per-runner config volume keeps the registration/configuration alongside the runner installation across ordinary restarts; work and tool-cache volumes are separate for every runner.
+A healthy container has a live runner process and `/run/runner-ready`. On `TERM`, the entrypoint stops the runner, requests a short-lived removal token internally, and deregisters it. Each runner root retains its configuration, work, action runtime, and tool cache across ordinary restarts. The identical host/container path is required for Docker job and service containers.
 
 The entrypoint creates/reuses a group for `DOCKER_GID`, adds `runner` to it, and verifies the daemon before registration. This check prints no credential:
 
@@ -68,17 +82,17 @@ docker exec --user runner github-runner-01 docker version --format '{{.Server.Ve
 
 ## Image update and rollback
 
-Record the version/checksum pair used by every deployment. To update, set both `RUNNER_VERSION` and its matching `RUNNER_SHA256` in the deployment-host `.env`, run the pinned `docker build` command above on the Docker host, then use Portainer **Redeploy**. Never change one without the other. The config volumes are retained, while the image distribution is copied into each config volume on startup.
+Record the version/checksum pair used by every deployment. To update, set both `RUNNER_VERSION` and its matching `RUNNER_SHA256` in the deployment-host `.env`, run the pinned `docker build` command above on the Docker host, then use Portainer **Redeploy**. Never change one without the other. The image distribution is copied into each persistent runner root on startup.
 
-To roll back, rebuild the previously recorded version/checksum pair, restore those values in the Portainer stack environment, and redeploy. If a runner release has already changed the on-volume runner files, stop the stack before the rollback and redeploy the same config volumes; do not delete work volumes. If GitHub refuses an old runner binary, use the previous known-good release pair and re-register during the maintenance window.
+To roll back, rebuild the previously recorded version/checksum pair, restore those values in the Portainer stack environment, and redeploy. If a runner release has already changed files in a runner root, stop the stack before the rollback and redeploy without deleting the roots. If GitHub refuses an old runner binary, use the previous known-good release pair and re-register during the maintenance window.
 
-## Adding a sixth runner
+## Adding an eleventh runner
 
-Do not reuse an existing runner's volumes or name. In a reviewed change, copy one service block to `github-runner-06`, set `RUNNER_NAME: ci-linux-06`, and add new `github-runner-06-work`, `github-runner-06-config`, and `github-runner-06-tool-cache` named volumes. Add the corresponding organization runner to the `linux-docker-ci` group and verify the GitHub Actions concurrency demand justifies the extra host capacity before deploying. The production manifest intentionally remains at five services until this procedure is completed and reviewed.
+Do not reuse an existing runner root or name. In a reviewed change, copy one service block to `github-runner-11`, set `RUNNER_NAME: ci-linux-11`, and give it the matching `/opt/github-runner-pool/runners/11` host root for `RUNNER_ROOT`, `RUNNER_WORKDIR`, and `RUNNER_TOOL_CACHE`. Create that host directory with owner `1001:1001` before deployment. Add the corresponding organization runner to the `linux-docker-ci` group and verify the GitHub Actions concurrency demand justifies the extra host capacity before deploying. The production manifest intentionally remains at ten services until this procedure is completed and reviewed.
 
 ## Safe cache and Docker cleanup
 
-Never prune while a runner or a job it started is active. First pause workflow dispatches, wait for all organization jobs to finish, and confirm no pool or job containers are running. Then stop all five services and verify the stop before touching volumes:
+Never prune while a runner or a job it started is active. First pause workflow dispatches, wait for all organization jobs to finish, and confirm no pool or job containers are running. Then stop all ten services and verify the stop before touching the persistent runner roots:
 
 ```bash
 docker compose --env-file .env -f docker-compose.yml stop
@@ -86,15 +100,16 @@ docker ps --filter name='github-runner-' --filter status=running
 docker compose --env-file .env -f docker-compose.yml rm --force
 ```
 
-The second command must print no running runner container, and the GitHub Actions organization page must show no active job. Only then may you remove a disposable tool cache volume (never `work` or `config`) and optionally prune old Docker build cache:
+The second command must print no running runner container, and the GitHub Actions organization page must show no active job. Only then may you clear disposable per-runner tool caches (never the runner roots, work directories, or runner configuration) and optionally prune old Docker build cache:
 
 ```bash
-docker volume rm github-runner-01-tool-cache github-runner-02-tool-cache \
-  github-runner-03-tool-cache github-runner-04-tool-cache github-runner-05-tool-cache
+for runner in $(seq -w 1 10); do
+  sudo rm -rf --one-file-system "/opt/github-runner-pool/runners/$runner/_tool"
+done
 docker builder prune --filter until=24h
 ```
 
-Recreate the cache volumes with `up -d`. Do not use `docker system prune`, remove work/config volumes, or run a global image/container prune on a live host; those operations can destroy evidence or affect unrelated workloads.
+Recreate the tool-cache directories by starting the stack with `up -d`. Do not use `docker system prune`, remove runner roots, or run a global image/container prune on a live host; those operations can destroy evidence or affect unrelated workloads.
 
 ## Security and fork restrictions
 
