@@ -5,7 +5,7 @@ umask 077
 
 readonly api_base="https://api.github.com/orgs/${GITHUB_ORG:?GITHUB_ORG is required}"
 readonly pat_file="/run/secrets/github-runner-api-token"
-readonly runner_config_dir="/runner/config"
+readonly runner_config_dir="${RUNNER_ROOT:-}"
 readonly ready_file="/run/runner-ready"
 readonly pid_file="/run/runner.pid"
 
@@ -31,6 +31,7 @@ require_value() {
 require_value RUNNER_NAME
 require_value RUNNER_GROUP
 require_value RUNNER_LABELS
+require_value RUNNER_ROOT
 require_value RUNNER_WORKDIR
 require_value RUNNER_TOOL_CACHE
 require_value DOCKER_GID
@@ -50,7 +51,7 @@ runuser -u runner -- docker version --format '{{.Server.Version}}' >/dev/null 2>
     || fail "runner cannot access the host Docker daemon"
 
 [[ -r "$pat_file" ]] || fail "host PAT file is not readable at $pat_file"
-[[ -d "$runner_config_dir" ]] || fail "runner config volume is unavailable at $runner_config_dir"
+[[ -d "$runner_config_dir" ]] || fail "runner root bind mount is unavailable at $runner_config_dir"
 
 # Read the host-mounted PAT without ever placing it in compose environment or
 # printing it. The temporary curl config also keeps it out of process listings.
@@ -61,7 +62,21 @@ unset pat_lines
 [[ -n "$github_pat" ]] || fail "host PAT file is empty"
 [[ "$github_pat" != *[![:graph:]]* ]] || fail "host PAT file must contain one printable token line"
 
-install -d -o runner -g runner -m 0755 "$runner_config_dir" "$RUNNER_WORKDIR" "$RUNNER_TOOL_CACHE"
+[[ "$RUNNER_WORKDIR" == "$runner_config_dir"/* ]] \
+    || fail "RUNNER_WORKDIR must be inside RUNNER_ROOT"
+[[ "$RUNNER_TOOL_CACHE" == "$runner_config_dir"/* ]] \
+    || fail "RUNNER_TOOL_CACHE must be inside RUNNER_ROOT"
+tool_cache_dotnet_dir="${RUNNER_TOOL_CACHE}/dotnet"
+install -d -o runner -g runner -m 0755 \
+    "$runner_config_dir" "$RUNNER_WORKDIR" "$RUNNER_TOOL_CACHE" "$tool_cache_dotnet_dir"
+if [[ -L /usr/share/dotnet ]]; then
+    [[ "$(readlink /usr/share/dotnet)" == "$tool_cache_dotnet_dir" ]] \
+        || fail "/usr/share/dotnet points outside the runner tool cache"
+elif [[ -e /usr/share/dotnet ]]; then
+    fail "/usr/share/dotnet already exists; refusing to replace image content"
+else
+    ln -s "$tool_cache_dotnet_dir" /usr/share/dotnet
+fi
 cp -a /opt/actions-runner-dist/. "$runner_config_dir/"
 chown -R runner:runner "$runner_config_dir"
 rm -f "$ready_file" "$pid_file"

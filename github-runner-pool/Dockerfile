@@ -64,7 +64,7 @@ RUN test -n "${RUNNER_VERSION}" \
 
 RUN groupadd --gid 1001 runner \
     && useradd --uid 1001 --gid runner --create-home --home-dir /home/runner --shell /bin/bash runner \
-    && install -d -o runner -g runner -m 0755 /runner /runner/config /runner/_work /runner/_tool \
+    && install -d -o runner -g runner -m 0755 /runner \
     && chown -R runner:runner /opt/actions-runner-dist
 
 COPY --chmod=0755 entrypoint.sh /usr/local/bin/entrypoint.sh
