@@ -147,7 +147,7 @@ registered="true"
 runuser -u runner -- "$runner_config_dir/run.sh" &
 runner_pid="$!"
 printf '%s\n' "$runner_pid" > "$pid_file"
-touch "$ready_file"
+printf 'ready\n' > "$ready_file"
 log "Started ${RUNNER_NAME} (org=${GITHUB_ORG}, group=${RUNNER_GROUP})"
 
 wait "$runner_pid"
