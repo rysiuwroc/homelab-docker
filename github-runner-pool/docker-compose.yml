@@ -9,13 +9,8 @@ x-runner-environment: &runner-environment
   RUNNER_TOOL_CACHE: /runner/_tool
 
 x-runner-common: &runner-common
-  build:
-    context: .
-    dockerfile: Dockerfile
-    args:
-      RUNNER_VERSION: "${RUNNER_VERSION:?set RUNNER_VERSION in Portainer stack env}"
-      RUNNER_SHA256: "${RUNNER_SHA256:?set RUNNER_SHA256 in Portainer stack env}"
   image: "github-runner-pool:${RUNNER_VERSION:?set RUNNER_VERSION in Portainer stack env}"
+  pull_policy: never
   init: true
   restart: unless-stopped
   logging:
