@@ -32,6 +32,7 @@ require_value RUNNER_NAME
 require_value RUNNER_GROUP
 require_value RUNNER_LABELS
 require_value RUNNER_WORKDIR
+require_value RUNNER_TOOL_CACHE
 require_value DOCKER_GID
 [[ "$DOCKER_GID" =~ ^[0-9]+$ ]] || fail "DOCKER_GID must be numeric"
 (( DOCKER_GID > 0 && DOCKER_GID < 4294967295 )) || fail "DOCKER_GID is out of range"
@@ -60,7 +61,7 @@ unset pat_lines
 [[ -n "$github_pat" ]] || fail "host PAT file is empty"
 [[ "$github_pat" != *[![:graph:]]* ]] || fail "host PAT file must contain one printable token line"
 
-install -d -o runner -g runner -m 0755 "$runner_config_dir" "$RUNNER_WORKDIR"
+install -d -o runner -g runner -m 0755 "$runner_config_dir" "$RUNNER_WORKDIR" "$RUNNER_TOOL_CACHE"
 cp -a /opt/actions-runner-dist/. "$runner_config_dir/"
 chown -R runner:runner "$runner_config_dir"
 rm -f "$ready_file" "$pid_file"
@@ -100,7 +101,7 @@ deregister() {
         return 0
     fi
 
-    if ! runuser -u runner -- "$runner_config_dir/config.sh" remove --unattended --token "$removal_token" >/dev/null; then
+    if ! runuser -u runner -- "$runner_config_dir/config.sh" remove --token "$removal_token" >/dev/null; then
         log "WARNING: GitHub runner removal failed for ${RUNNER_NAME}"
         return 0
     fi

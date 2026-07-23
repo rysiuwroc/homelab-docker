@@ -10,8 +10,9 @@ ENV DEBIAN_FRONTEND=noninteractive \
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
-# The runner image intentionally contains only general-purpose build, source,
-# archive, Python, and network tooling. Language-specific SDKs belong in jobs.
+# The runner image carries only general CI execution, source, archive, Python,
+# Docker, and network tooling. Compilers and language-specific SDKs belong in
+# the workflows that require them.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         bash \
@@ -28,11 +29,6 @@ RUN apt-get update \
         zip \
         python3 \
         python3-pip \
-        make \
-        gcc \
-        g++ \
-        libc6-dev \
-        pkg-config \
         iproute2 \
         iputils-ping \
         dnsutils \
