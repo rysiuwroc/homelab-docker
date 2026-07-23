@@ -29,11 +29,15 @@ The file must contain exactly the PAT on one line. Do not put the PAT in Git, Po
 
 ## Portainer Git-stack deployment
 
-1. Copy `.env.example` to a deployment-host `.env` file and set `RUNNER_SHA256` to the 64-hex SHA-256 published for the exact `RUNNER_VERSION` release. The Dockerfile refuses missing or malformed build arguments and verifies the downloaded archive before extraction.
+1. Copy `.env.example` to a deployment-host `.env` file and set `RUNNER_SHA256` to the 64-hex SHA-256 published for the exact `RUNNER_VERSION` release. Before the first deployment and every runner-version update, build the pinned image on the Docker host:
+   ```bash
+   docker build --build-arg RUNNER_VERSION="$RUNNER_VERSION" --build-arg RUNNER_SHA256="$RUNNER_SHA256" -t "github-runner-pool:$RUNNER_VERSION" github-runner-pool/
+   ```
+   The Dockerfile refuses missing or malformed build arguments and verifies the downloaded archive before extraction. Portainer then deploys only the already-built, pinned image; this avoids its remote-agent BuildKit limitation.
 2. Set `DOCKER_GID` to the host socket group ID (`stat -c '%g' /var/run/docker.sock`). Keep the host secret path in `GITHUB_RUNNER_API_TOKEN_FILE`.
 3. In Portainer, choose **Stacks → Add stack → Git repository**, select this repository and the `github-runner-pool/docker-compose.yml` compose path, and name the stack `github-runner-pool`.
 4. Add the non-secret values from `.env` to the Portainer stack environment. Do not add a PAT value. The compose file bind-mounts the host file read-only at `/run/secrets/github-runner-api-token`.
-5. Deploy the stack and confirm all five services build, register, and become healthy. The compose build downloads only the pinned runner archive; Node, .NET, Java, Go, and Rust SDKs are deliberately absent.
+5. Deploy the stack and confirm all five services register and become healthy. The image contains only the pinned runner and general Linux CI tooling; Node, .NET, Java, Go, and Rust SDKs are deliberately absent.
 
 For CI interpolation checks, use the token-free example (the placeholder checksum is only a config-time value; it is not a usable image build):
 
@@ -64,9 +68,9 @@ docker exec --user runner github-runner-01 docker version --format '{{.Server.Ve
 
 ## Image update and rollback
 
-Record the version/checksum pair used by every deployment. To update, set both `RUNNER_VERSION` and its matching `RUNNER_SHA256` in the deployment-host `.env`, then use Portainer **Redeploy** (or `docker compose up -d --build`). Never change one without the other. The config volumes are retained, while the image distribution is copied into each config volume on startup.
+Record the version/checksum pair used by every deployment. To update, set both `RUNNER_VERSION` and its matching `RUNNER_SHA256` in the deployment-host `.env`, run the pinned `docker build` command above on the Docker host, then use Portainer **Redeploy**. Never change one without the other. The config volumes are retained, while the image distribution is copied into each config volume on startup.
 
-To roll back, restore the previously recorded version/checksum pair and redeploy with `--build`. If a runner release has already changed the on-volume runner files, stop the stack before the rollback and redeploy the same config volumes; do not delete work volumes. If GitHub refuses an old runner binary, use the previous known-good release pair and re-register during the maintenance window.
+To roll back, rebuild the previously recorded version/checksum pair, restore those values in the Portainer stack environment, and redeploy. If a runner release has already changed the on-volume runner files, stop the stack before the rollback and redeploy the same config volumes; do not delete work volumes. If GitHub refuses an old runner binary, use the previous known-good release pair and re-register during the maintenance window.
 
 ## Adding a sixth runner
 
