@@ -1,0 +1,159 @@
+name: github-runner-pool
+
+x-runner-environment: &runner-environment
+  GITHUB_ORG: "${GITHUB_ORG:?set GITHUB_ORG in Portainer stack env}"
+  RUNNER_GROUP: "${RUNNER_GROUP:?set RUNNER_GROUP in Portainer stack env}"
+  RUNNER_LABELS: "${RUNNER_LABELS:?set RUNNER_LABELS in Portainer stack env}"
+  DOCKER_GID: "${DOCKER_GID:?set DOCKER_GID to the host docker.sock group id}"
+  RUNNER_WORKDIR: /runner/_work
+  RUNNER_TOOL_CACHE: /runner/_tool
+
+x-runner-common: &runner-common
+  build:
+    context: .
+    dockerfile: Dockerfile
+    args:
+      RUNNER_VERSION: "${RUNNER_VERSION:?set RUNNER_VERSION in Portainer stack env}"
+      RUNNER_SHA256: "${RUNNER_SHA256:?set RUNNER_SHA256 in Portainer stack env}"
+  image: "github-runner-pool:${RUNNER_VERSION:?set RUNNER_VERSION in Portainer stack env}"
+  init: true
+  restart: unless-stopped
+  logging:
+    driver: json-file
+    options:
+      max-size: 10m
+      max-file: "3"
+  stop_grace_period: 2m
+  group_add:
+    - "${DOCKER_GID:?set DOCKER_GID to the host docker.sock group id}"
+  volumes:
+    - /var/run/docker.sock:/var/run/docker.sock
+  healthcheck:
+    test: ["CMD-SHELL", "test -s /run/runner-ready && test -s /run/runner.pid && kill -0 \"$(cat /run/runner.pid)\""]
+    interval: 30s
+    timeout: 5s
+    retries: 3
+    start_period: 30s
+
+services:
+  github-runner-01:
+    <<: *runner-common
+    container_name: github-runner-01
+    environment:
+      <<: *runner-environment
+      RUNNER_NAME: ci-linux-01
+    volumes:
+      - github-runner-01-work:/runner/_work
+      - github-runner-01-config:/runner/config
+      - github-runner-01-tool-cache:/runner/_tool
+      - /var/run/docker.sock:/var/run/docker.sock
+      - type: bind
+        source: "${GITHUB_RUNNER_API_TOKEN_FILE:?set GITHUB_RUNNER_API_TOKEN_FILE to a host mode-0600 file}"
+        target: /run/secrets/github-runner-api-token
+        read_only: true
+        bind:
+          create_host_path: false
+
+  github-runner-02:
+    <<: *runner-common
+    container_name: github-runner-02
+    environment:
+      <<: *runner-environment
+      RUNNER_NAME: ci-linux-02
+    volumes:
+      - github-runner-02-work:/runner/_work
+      - github-runner-02-config:/runner/config
+      - github-runner-02-tool-cache:/runner/_tool
+      - /var/run/docker.sock:/var/run/docker.sock
+      - type: bind
+        source: "${GITHUB_RUNNER_API_TOKEN_FILE:?set GITHUB_RUNNER_API_TOKEN_FILE to a host mode-0600 file}"
+        target: /run/secrets/github-runner-api-token
+        read_only: true
+        bind:
+          create_host_path: false
+
+  github-runner-03:
+    <<: *runner-common
+    container_name: github-runner-03
+    environment:
+      <<: *runner-environment
+      RUNNER_NAME: ci-linux-03
+    volumes:
+      - github-runner-03-work:/runner/_work
+      - github-runner-03-config:/runner/config
+      - github-runner-03-tool-cache:/runner/_tool
+      - /var/run/docker.sock:/var/run/docker.sock
+      - type: bind
+        source: "${GITHUB_RUNNER_API_TOKEN_FILE:?set GITHUB_RUNNER_API_TOKEN_FILE to a host mode-0600 file}"
+        target: /run/secrets/github-runner-api-token
+        read_only: true
+        bind:
+          create_host_path: false
+
+  github-runner-04:
+    <<: *runner-common
+    container_name: github-runner-04
+    environment:
+      <<: *runner-environment
+      RUNNER_NAME: ci-linux-04
+    volumes:
+      - github-runner-04-work:/runner/_work
+      - github-runner-04-config:/runner/config
+      - github-runner-04-tool-cache:/runner/_tool
+      - /var/run/docker.sock:/var/run/docker.sock
+      - type: bind
+        source: "${GITHUB_RUNNER_API_TOKEN_FILE:?set GITHUB_RUNNER_API_TOKEN_FILE to a host mode-0600 file}"
+        target: /run/secrets/github-runner-api-token
+        read_only: true
+        bind:
+          create_host_path: false
+
+  github-runner-05:
+    <<: *runner-common
+    container_name: github-runner-05
+    environment:
+      <<: *runner-environment
+      RUNNER_NAME: ci-linux-05
+    volumes:
+      - github-runner-05-work:/runner/_work
+      - github-runner-05-config:/runner/config
+      - github-runner-05-tool-cache:/runner/_tool
+      - /var/run/docker.sock:/var/run/docker.sock
+      - type: bind
+        source: "${GITHUB_RUNNER_API_TOKEN_FILE:?set GITHUB_RUNNER_API_TOKEN_FILE to a host mode-0600 file}"
+        target: /run/secrets/github-runner-api-token
+        read_only: true
+        bind:
+          create_host_path: false
+
+volumes:
+  github-runner-01-work:
+    name: github-runner-01-work
+  github-runner-01-config:
+    name: github-runner-01-config
+  github-runner-01-tool-cache:
+    name: github-runner-01-tool-cache
+  github-runner-02-work:
+    name: github-runner-02-work
+  github-runner-02-config:
+    name: github-runner-02-config
+  github-runner-02-tool-cache:
+    name: github-runner-02-tool-cache
+  github-runner-03-work:
+    name: github-runner-03-work
+  github-runner-03-config:
+    name: github-runner-03-config
+  github-runner-03-tool-cache:
+    name: github-runner-03-tool-cache
+  github-runner-04-work:
+    name: github-runner-04-work
+  github-runner-04-config:
+    name: github-runner-04-config
+  github-runner-04-tool-cache:
+    name: github-runner-04-tool-cache
+  github-runner-05-work:
+    name: github-runner-05-work
+  github-runner-05-config:
+    name: github-runner-05-config
+  github-runner-05-tool-cache:
+    name: github-runner-05-tool-cache

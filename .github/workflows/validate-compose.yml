@@ -29,6 +29,13 @@ jobs:
     env:
       ADGUARD_PASSWORD: ci-dummy
       CONNECTOR_SLACK_URL: https://ci.invalid/dummy
+      GITHUB_ORG: MRysiukiewicz
+      RUNNER_GROUP: linux-docker-ci
+      RUNNER_LABELS: self-hosted,linux,x64,docker
+      DOCKER_GID: "999"
+      RUNNER_VERSION: 2.329.0
+      RUNNER_SHA256: 0000000000000000000000000000000000000000000000000000000000000000
+      GITHUB_RUNNER_API_TOKEN_FILE: /tmp/ci-github-runner-api-token
     steps:
       - uses: actions/checkout@v4
 
