@@ -3,6 +3,9 @@ githubConfigSecret: arc-github-auth
 runnerGroup: linux-docker-ci
 runnerScaleSetName: linux-docker-ci
 scaleSetLabels: [self-hosted, linux, x64, docker]
+controllerServiceAccount:
+  namespace: arc-systems
+  name: arc-gha-rs-controller
 minRunners: 7
 maxRunners: 15
 template:
@@ -44,6 +47,24 @@ template:
             mountPath: /var/run
           - name: dind-externals
             mountPath: /home/runner/externals
+      - name: prewarm-dotnet-sdk
+        image: docker@sha256:bfec1f5159c63a81ca6fdedbd81404d2c0e16378ed0feec3bb3fbf3998847659
+        command:
+          - /bin/sh
+          - -ec
+          - |
+            image=registry-mcr-images.arc-runners.svc.cluster.local:5000/dotnet/sdk:10.0
+            if docker image inspect "$image" >/dev/null 2>&1; then
+              printf '%s\n' "Prewarm image already present: $image"
+            elif ! docker pull "$image"; then
+              printf '%s\n' "WARNING: could not prewarm $image; job startup will pull it instead." >&2
+            fi
+        env:
+          - name: DOCKER_HOST
+            value: unix:///var/run/docker.sock
+        volumeMounts:
+          - name: dind-sock
+            mountPath: /var/run
     containers:
       - name: runner
         image: local/arc-ci-runner:2026-07-23

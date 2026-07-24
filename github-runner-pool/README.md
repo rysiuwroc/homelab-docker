@@ -136,6 +136,29 @@ sudo k3s kubectl get pods -n arc-runners -l app=nexus-package-cache
 
 The admin password remains only in the Kubernetes Secret and is used when future package proxy repositories need provisioning. Do not delete `nexus-data` except when intentionally discarding the package cache; doing so removes all cached packages and triggers the bootstrap again.
 
+## ARC runner image prewarm
+
+`arc-runner-values.yaml` prewarms `registry-mcr-images.arc-runners.svc.cluster.local:5000/dotnet/sdk:10.0` in each new runner's private DinD store before that runner registers. This removes the layer transfer from the first .NET job that runner accepts. The prewarm is best-effort: a registry failure is logged but never prevents runner registration; GitHub Actions will then pull the image in the job as usual.
+
+The value file explicitly targets the existing `arc-gha-rs-controller` ServiceAccount in `arc-systems`, so Helm does not rely on controller discovery. Apply a reviewed update with the pinned chart version:
+
+```bash
+sudo env KUBECONFIG=/etc/rancher/k3s/k3s.yaml helm upgrade linux-docker-ci \
+  oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set \
+  --version 0.14.2 --namespace arc-runners \
+  --values github-runner-pool/arc-runner-values.yaml --wait --timeout 180s
+```
+
+After an update, verify that the replacement runner pods are ready and review the prewarm log from one runner:
+
+```bash
+sudo k3s kubectl wait -n arc-runners --for=condition=Ready pod \
+  -l app.kubernetes.io/component=runner --timeout=240s
+runner=$(sudo k3s kubectl get pod -n arc-runners -l app.kubernetes.io/component=runner \
+  -o jsonpath='{.items[0].metadata.name}')
+sudo k3s kubectl logs -n arc-runners "$runner" -c prewarm-dotnet-sdk
+```
+
 ## Security and fork restrictions
 
 These runners have access to the host Docker socket, which is equivalent to high privilege on the Docker host. Configure `linux-docker-ci` access for all current and future repositories in the `MRysiukiewicz` organization as required, but use it only for trusted private repositories and never for arbitrary public or untrusted workflows. Require approval for fork pull requests and do not expose these runners or secrets to unreviewed fork code. Avoid `pull_request_target` workflows that check out untrusted fork code with privileged credentials. Review workflow changes before merging and keep job permissions least-privileged.
