@@ -1,0 +1,167 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: nexus-data
+  namespace: arc-runners
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 20Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nexus-package-cache
+  namespace: arc-runners
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: nexus-package-cache
+  template:
+    metadata:
+      labels:
+        app: nexus-package-cache
+    spec:
+      securityContext:
+        fsGroup: 200
+      containers:
+        - name: nexus
+          image: sonatype/nexus3@sha256:2f5fe227cc673b2ac3ec8ac2ebe4c4e3dfa4717ac837396be4469917e5254849
+          ports:
+            - containerPort: 8081
+          env:
+            - name: INSTALL4J_ADD_VM_PARAMS
+              value: -Xms1200m -Xmx1200m -XX:MaxDirectMemorySize=1200m
+          resources:
+            requests:
+              cpu: 500m
+              memory: 2Gi
+            limits:
+              cpu: "2"
+              memory: 3Gi
+          readinessProbe:
+            httpGet:
+              path: /service/rest/v1/status
+              port: 8081
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 18
+          livenessProbe:
+            httpGet:
+              path: /service/rest/v1/status
+              port: 8081
+            initialDelaySeconds: 300
+            periodSeconds: 20
+            timeoutSeconds: 3
+            failureThreshold: 3
+          volumeMounts:
+            - name: data
+              mountPath: /nexus-data
+        - name: bootstrap
+          image: sonatype/nexus3@sha256:2f5fe227cc673b2ac3ec8ac2ebe4c4e3dfa4717ac837396be4469917e5254849
+          command: ["/bin/sh", "-ec"]
+          args:
+            - |
+              umask 077
+              package_url=http://127.0.0.1:8081/repository/nuget-proxy/v3/content/0/microsoft.net.test.sdk/17.14.1/microsoft.net.test.sdk.17.14.1.nupkg
+              for attempt in $(seq 1 120); do
+                if curl -fsS -o /dev/null http://127.0.0.1:8081/service/rest/v1/status/writable; then
+                  break
+                fi
+                sleep 5
+              done
+              curl -fsS -o /dev/null http://127.0.0.1:8081/service/rest/v1/status/writable
+              if ! test -s /nexus-data/admin.password && curl -fsS -o /dev/null "$package_url"; then
+                touch /tmp/bootstrap-ready
+                exec tail -f /dev/null
+              fi
+              if test -s /nexus-data/admin.password; then
+                initial_password=true
+                admin_password=$(cat /nexus-data/admin.password)
+              else
+                initial_password=false
+                admin_password=$(cat /opt/nexus-bootstrap-secrets/admin-password)
+              fi
+              auth=$(mktemp)
+              payload=$(mktemp)
+              anonymous_password=$(mktemp)
+              trap 'rm -f "$auth" "$payload" "$anonymous_password"' EXIT
+              printf 'user = admin:%s\n' "$admin_password" >"$auth"
+              curl --config "$auth" -fsS -o "$payload" http://127.0.0.1:8081/service/rest/v1/system/eula
+              sed -i 's/"accepted"[[:space:]]*:[[:space:]]*false/"accepted":true/' "$payload"
+              code=$(curl --config "$auth" -sS -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' --data @"$payload" http://127.0.0.1:8081/service/rest/v1/system/eula)
+              test "$code" = 204
+              cat >"$payload" <<'JSON'
+              {
+                "name": "nuget-proxy",
+                "online": true,
+                "storage": {"blobStoreName": "default", "strictContentTypeValidation": true},
+                "proxy": {"remoteUrl": "https://api.nuget.org/v3/index.json", "contentMaxAge": 1440, "metadataMaxAge": 1440},
+                "negativeCache": {"enabled": true, "timeToLive": 1440},
+                "httpClient": {"blocked": false, "autoBlock": true},
+                "nugetProxy": {"queryCacheItemMaxAge": 3600, "nugetVersion": "V3"}
+              }
+              JSON
+              code=$(curl --config "$auth" -sS -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' --data @"$payload" http://127.0.0.1:8081/service/rest/v1/repositories/nuget/proxy)
+              test "$code" = 201 || test "$code" = 400
+              printf '{"id":"ci-nuget-proxy-read","name":"ci-nuget-proxy-read","description":"Anonymous read access limited to the NuGet proxy","privileges":["nx-repository-view-nuget-nuget-proxy-browse","nx-repository-view-nuget-nuget-proxy-read"],"roles":[]}' >"$payload"
+              code=$(curl --config "$auth" -sS -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' --data @"$payload" http://127.0.0.1:8081/service/rest/v1/security/roles)
+              test "$code" = 200 || test "$code" = 400
+              openssl rand -base64 36 >"$anonymous_password"
+              printf '{"userId":"ci-nuget-anonymous","firstName":"CI","lastName":"Anonymous","emailAddress":"ci-nuget-anonymous@example.invalid","password":"%s","status":"active","roles":["ci-nuget-proxy-read"]}' "$(tr -d '\n' <"$anonymous_password")" >"$payload"
+              code=$(curl --config "$auth" -sS -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' --data @"$payload" http://127.0.0.1:8081/service/rest/v1/security/users)
+              test "$code" = 200 || test "$code" = 201 || test "$code" = 400
+              printf '{"userId":"ci-nuget-anonymous","firstName":"CI","lastName":"Anonymous","emailAddress":"ci-nuget-anonymous@example.invalid","source":"default","status":"active","roles":["ci-nuget-proxy-read"]}' >"$payload"
+              code=$(curl --config "$auth" -sS -o /dev/null -w '%{http_code}' -X PUT -H 'Content-Type: application/json' --data @"$payload" http://127.0.0.1:8081/service/rest/v1/security/users/ci-nuget-anonymous)
+              test "$code" = 204
+              printf '{"enabled":true,"userId":"ci-nuget-anonymous","realmName":"NexusAuthorizingRealm"}' >"$payload"
+              code=$(curl --config "$auth" -sS -o /dev/null -w '%{http_code}' -X PUT -H 'Content-Type: application/json' --data @"$payload" http://127.0.0.1:8081/service/rest/v1/security/anonymous)
+              test "$code" = 200
+              curl -fsS -o /dev/null "$package_url"
+              if "$initial_password"; then
+                code=$(curl --config "$auth" -sS -o /dev/null -w '%{http_code}' -X PUT -H 'Content-Type: text/plain' --data-binary @/opt/nexus-bootstrap-secrets/admin-password http://127.0.0.1:8081/service/rest/v1/security/users/admin/change-password)
+                test "$code" = 204
+                test ! -e /nexus-data/admin.password
+              fi
+              unset admin_password
+              rm -f "$auth" "$payload" "$anonymous_password"
+              touch /tmp/bootstrap-ready
+              exec tail -f /dev/null
+          readinessProbe:
+            exec:
+              command: ["/bin/sh", "-ec", "test -f /tmp/bootstrap-ready"]
+            initialDelaySeconds: 1
+            periodSeconds: 2
+            timeoutSeconds: 1
+            failureThreshold: 3
+          volumeMounts:
+            - name: data
+              mountPath: /nexus-data
+              readOnly: true
+            - name: admin-credentials
+              mountPath: /opt/nexus-bootstrap-secrets
+              readOnly: true
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: nexus-data
+        - name: admin-credentials
+          secret:
+            secretName: nexus-admin-credentials
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nexus-package-cache
+  namespace: arc-runners
+spec:
+  selector:
+    app: nexus-package-cache
+  ports:
+    - port: 8081
+      targetPort: 8081

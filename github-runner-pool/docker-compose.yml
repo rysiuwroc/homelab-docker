@@ -5,8 +5,6 @@ x-runner-environment: &runner-environment
   RUNNER_GROUP: "${RUNNER_GROUP:?set RUNNER_GROUP in Portainer stack env}"
   RUNNER_LABELS: "${RUNNER_LABELS:?set RUNNER_LABELS in Portainer stack env}"
   DOCKER_GID: "${DOCKER_GID:?set DOCKER_GID to the host docker.sock group id}"
-  RUNNER_WORKDIR: /runner/_work
-  RUNNER_TOOL_CACHE: /runner/_tool
 
 x-runner-common: &runner-common
   image: "github-runner-pool:${RUNNER_VERSION:?set RUNNER_VERSION in Portainer stack env}"
@@ -21,14 +19,20 @@ x-runner-common: &runner-common
   stop_grace_period: 2m
   group_add:
     - "${DOCKER_GID:?set DOCKER_GID to the host docker.sock group id}"
-  volumes:
-    - /var/run/docker.sock:/var/run/docker.sock
   healthcheck:
     test: ["CMD-SHELL", "test -s /run/runner-ready && test -s /run/runner.pid && kill -0 \"$(cat /run/runner.pid)\""]
     interval: 30s
     timeout: 5s
     retries: 3
     start_period: 30s
+
+x-runner-token-volume: &runner-token-volume
+  type: bind
+  source: "${GITHUB_RUNNER_API_TOKEN_FILE:?set GITHUB_RUNNER_API_TOKEN_FILE to a host mode-0600 file}"
+  target: /run/secrets/github-runner-api-token
+  read_only: true
+  bind:
+    create_host_path: false
 
 services:
   github-runner-01:
@@ -37,17 +41,17 @@ services:
     environment:
       <<: *runner-environment
       RUNNER_NAME: ci-linux-01
+      RUNNER_ROOT: /opt/github-runner-pool/runners/01
+      RUNNER_WORKDIR: /opt/github-runner-pool/runners/01/_work
+      RUNNER_TOOL_CACHE: /opt/github-runner-pool/runners/01/_tool
     volumes:
-      - github-runner-01-work:/runner/_work
-      - github-runner-01-config:/runner/config
-      - github-runner-01-tool-cache:/runner/_tool
-      - /var/run/docker.sock:/var/run/docker.sock
       - type: bind
-        source: "${GITHUB_RUNNER_API_TOKEN_FILE:?set GITHUB_RUNNER_API_TOKEN_FILE to a host mode-0600 file}"
-        target: /run/secrets/github-runner-api-token
-        read_only: true
+        source: /opt/github-runner-pool/runners/01
+        target: /opt/github-runner-pool/runners/01
         bind:
           create_host_path: false
+      - /var/run/docker.sock:/var/run/docker.sock
+      - *runner-token-volume
 
   github-runner-02:
     <<: *runner-common
@@ -55,17 +59,17 @@ services:
     environment:
       <<: *runner-environment
       RUNNER_NAME: ci-linux-02
+      RUNNER_ROOT: /opt/github-runner-pool/runners/02
+      RUNNER_WORKDIR: /opt/github-runner-pool/runners/02/_work
+      RUNNER_TOOL_CACHE: /opt/github-runner-pool/runners/02/_tool
     volumes:
-      - github-runner-02-work:/runner/_work
-      - github-runner-02-config:/runner/config
-      - github-runner-02-tool-cache:/runner/_tool
-      - /var/run/docker.sock:/var/run/docker.sock
       - type: bind
-        source: "${GITHUB_RUNNER_API_TOKEN_FILE:?set GITHUB_RUNNER_API_TOKEN_FILE to a host mode-0600 file}"
-        target: /run/secrets/github-runner-api-token
-        read_only: true
+        source: /opt/github-runner-pool/runners/02
+        target: /opt/github-runner-pool/runners/02
         bind:
           create_host_path: false
+      - /var/run/docker.sock:/var/run/docker.sock
+      - *runner-token-volume
 
   github-runner-03:
     <<: *runner-common
@@ -73,17 +77,17 @@ services:
     environment:
       <<: *runner-environment
       RUNNER_NAME: ci-linux-03
+      RUNNER_ROOT: /opt/github-runner-pool/runners/03
+      RUNNER_WORKDIR: /opt/github-runner-pool/runners/03/_work
+      RUNNER_TOOL_CACHE: /opt/github-runner-pool/runners/03/_tool
     volumes:
-      - github-runner-03-work:/runner/_work
-      - github-runner-03-config:/runner/config
-      - github-runner-03-tool-cache:/runner/_tool
-      - /var/run/docker.sock:/var/run/docker.sock
       - type: bind
-        source: "${GITHUB_RUNNER_API_TOKEN_FILE:?set GITHUB_RUNNER_API_TOKEN_FILE to a host mode-0600 file}"
-        target: /run/secrets/github-runner-api-token
-        read_only: true
+        source: /opt/github-runner-pool/runners/03
+        target: /opt/github-runner-pool/runners/03
         bind:
           create_host_path: false
+      - /var/run/docker.sock:/var/run/docker.sock
+      - *runner-token-volume
 
   github-runner-04:
     <<: *runner-common
@@ -91,17 +95,17 @@ services:
     environment:
       <<: *runner-environment
       RUNNER_NAME: ci-linux-04
+      RUNNER_ROOT: /opt/github-runner-pool/runners/04
+      RUNNER_WORKDIR: /opt/github-runner-pool/runners/04/_work
+      RUNNER_TOOL_CACHE: /opt/github-runner-pool/runners/04/_tool
     volumes:
-      - github-runner-04-work:/runner/_work
-      - github-runner-04-config:/runner/config
-      - github-runner-04-tool-cache:/runner/_tool
-      - /var/run/docker.sock:/var/run/docker.sock
       - type: bind
-        source: "${GITHUB_RUNNER_API_TOKEN_FILE:?set GITHUB_RUNNER_API_TOKEN_FILE to a host mode-0600 file}"
-        target: /run/secrets/github-runner-api-token
-        read_only: true
+        source: /opt/github-runner-pool/runners/04
+        target: /opt/github-runner-pool/runners/04
         bind:
           create_host_path: false
+      - /var/run/docker.sock:/var/run/docker.sock
+      - *runner-token-volume
 
   github-runner-05:
     <<: *runner-common
@@ -109,46 +113,104 @@ services:
     environment:
       <<: *runner-environment
       RUNNER_NAME: ci-linux-05
+      RUNNER_ROOT: /opt/github-runner-pool/runners/05
+      RUNNER_WORKDIR: /opt/github-runner-pool/runners/05/_work
+      RUNNER_TOOL_CACHE: /opt/github-runner-pool/runners/05/_tool
     volumes:
-      - github-runner-05-work:/runner/_work
-      - github-runner-05-config:/runner/config
-      - github-runner-05-tool-cache:/runner/_tool
-      - /var/run/docker.sock:/var/run/docker.sock
       - type: bind
-        source: "${GITHUB_RUNNER_API_TOKEN_FILE:?set GITHUB_RUNNER_API_TOKEN_FILE to a host mode-0600 file}"
-        target: /run/secrets/github-runner-api-token
-        read_only: true
+        source: /opt/github-runner-pool/runners/05
+        target: /opt/github-runner-pool/runners/05
         bind:
           create_host_path: false
+      - /var/run/docker.sock:/var/run/docker.sock
+      - *runner-token-volume
 
-volumes:
-  github-runner-01-work:
-    name: github-runner-01-work
-  github-runner-01-config:
-    name: github-runner-01-config
-  github-runner-01-tool-cache:
-    name: github-runner-01-tool-cache
-  github-runner-02-work:
-    name: github-runner-02-work
-  github-runner-02-config:
-    name: github-runner-02-config
-  github-runner-02-tool-cache:
-    name: github-runner-02-tool-cache
-  github-runner-03-work:
-    name: github-runner-03-work
-  github-runner-03-config:
-    name: github-runner-03-config
-  github-runner-03-tool-cache:
-    name: github-runner-03-tool-cache
-  github-runner-04-work:
-    name: github-runner-04-work
-  github-runner-04-config:
-    name: github-runner-04-config
-  github-runner-04-tool-cache:
-    name: github-runner-04-tool-cache
-  github-runner-05-work:
-    name: github-runner-05-work
-  github-runner-05-config:
-    name: github-runner-05-config
-  github-runner-05-tool-cache:
-    name: github-runner-05-tool-cache
+  github-runner-06:
+    <<: *runner-common
+    container_name: github-runner-06
+    environment:
+      <<: *runner-environment
+      RUNNER_NAME: ci-linux-06
+      RUNNER_ROOT: /opt/github-runner-pool/runners/06
+      RUNNER_WORKDIR: /opt/github-runner-pool/runners/06/_work
+      RUNNER_TOOL_CACHE: /opt/github-runner-pool/runners/06/_tool
+    volumes:
+      - type: bind
+        source: /opt/github-runner-pool/runners/06
+        target: /opt/github-runner-pool/runners/06
+        bind:
+          create_host_path: false
+      - /var/run/docker.sock:/var/run/docker.sock
+      - *runner-token-volume
+
+  github-runner-07:
+    <<: *runner-common
+    container_name: github-runner-07
+    environment:
+      <<: *runner-environment
+      RUNNER_NAME: ci-linux-07
+      RUNNER_ROOT: /opt/github-runner-pool/runners/07
+      RUNNER_WORKDIR: /opt/github-runner-pool/runners/07/_work
+      RUNNER_TOOL_CACHE: /opt/github-runner-pool/runners/07/_tool
+    volumes:
+      - type: bind
+        source: /opt/github-runner-pool/runners/07
+        target: /opt/github-runner-pool/runners/07
+        bind:
+          create_host_path: false
+      - /var/run/docker.sock:/var/run/docker.sock
+      - *runner-token-volume
+
+  github-runner-08:
+    <<: *runner-common
+    container_name: github-runner-08
+    environment:
+      <<: *runner-environment
+      RUNNER_NAME: ci-linux-08
+      RUNNER_ROOT: /opt/github-runner-pool/runners/08
+      RUNNER_WORKDIR: /opt/github-runner-pool/runners/08/_work
+      RUNNER_TOOL_CACHE: /opt/github-runner-pool/runners/08/_tool
+    volumes:
+      - type: bind
+        source: /opt/github-runner-pool/runners/08
+        target: /opt/github-runner-pool/runners/08
+        bind:
+          create_host_path: false
+      - /var/run/docker.sock:/var/run/docker.sock
+      - *runner-token-volume
+
+  github-runner-09:
+    <<: *runner-common
+    container_name: github-runner-09
+    environment:
+      <<: *runner-environment
+      RUNNER_NAME: ci-linux-09
+      RUNNER_ROOT: /opt/github-runner-pool/runners/09
+      RUNNER_WORKDIR: /opt/github-runner-pool/runners/09/_work
+      RUNNER_TOOL_CACHE: /opt/github-runner-pool/runners/09/_tool
+    volumes:
+      - type: bind
+        source: /opt/github-runner-pool/runners/09
+        target: /opt/github-runner-pool/runners/09
+        bind:
+          create_host_path: false
+      - /var/run/docker.sock:/var/run/docker.sock
+      - *runner-token-volume
+
+  github-runner-10:
+    <<: *runner-common
+    container_name: github-runner-10
+    environment:
+      <<: *runner-environment
+      RUNNER_NAME: ci-linux-10
+      RUNNER_ROOT: /opt/github-runner-pool/runners/10
+      RUNNER_WORKDIR: /opt/github-runner-pool/runners/10/_work
+      RUNNER_TOOL_CACHE: /opt/github-runner-pool/runners/10/_tool
+    volumes:
+      - type: bind
+        source: /opt/github-runner-pool/runners/10
+        target: /opt/github-runner-pool/runners/10
+        bind:
+          create_host_path: false
+      - /var/run/docker.sock:/var/run/docker.sock
+      - *runner-token-volume
