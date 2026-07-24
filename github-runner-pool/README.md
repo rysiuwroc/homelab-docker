@@ -111,6 +111,31 @@ docker builder prune --filter until=24h
 
 Recreate the tool-cache directories by starting the stack with `up -d`. Do not use `docker system prune`, remove runner roots, or run a global image/container prune on a live host; those operations can destroy evidence or affect unrelated workloads.
 
+## ARC package proxy cache
+
+`nexus-package-cache.yaml` deploys an internal, persistent Nexus NuGet v3 proxy for ARC runners. It is not exposed outside the `arc-runners` namespace. The bootstrap sidecar accepts the Nexus Community EULA, creates the `nuget-proxy` repository, grants the anonymous client only read/browse access to that repository, and confirms a real `.nupkg` download before the Service becomes ready.
+
+Before applying the manifest, provision the administrator password as a Kubernetes Secret. Generate it on the K3s host; do not print, commit, or place its value in shell history:
+
+```bash
+umask 077
+password_file=$(mktemp)
+openssl rand -base64 36 | tr -d '\n' >"$password_file"
+sudo k3s kubectl create secret generic -n arc-runners nexus-admin-credentials \
+  --from-file=admin-password="$password_file"
+rm -f "$password_file"
+```
+
+Deploy and verify the proxy:
+
+```bash
+sudo k3s kubectl apply -f github-runner-pool/nexus-package-cache.yaml
+sudo k3s kubectl rollout status deployment/nexus-package-cache -n arc-runners --timeout=420s
+sudo k3s kubectl get pods -n arc-runners -l app=nexus-package-cache
+```
+
+The admin password remains only in the Kubernetes Secret and is used when future package proxy repositories need provisioning. Do not delete `nexus-data` except when intentionally discarding the package cache; doing so removes all cached packages and triggers the bootstrap again.
+
 ## Security and fork restrictions
 
 These runners have access to the host Docker socket, which is equivalent to high privilege on the Docker host. Configure `linux-docker-ci` access for all current and future repositories in the `MRysiukiewicz` organization as required, but use it only for trusted private repositories and never for arbitrary public or untrusted workflows. Require approval for fork pull requests and do not expose these runners or secrets to unreviewed fork code. Avoid `pull_request_target` workflows that check out untrusted fork code with privileged credentials. Review workflow changes before merging and keep job permissions least-privileged.
