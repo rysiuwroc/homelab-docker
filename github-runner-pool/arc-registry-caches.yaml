@@ -1,0 +1,152 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: registry-docker-cache-config
+  namespace: arc-runners
+data:
+  config.yml: |
+    version: 0.1
+    storage:
+      filesystem:
+        rootdirectory: /var/lib/registry
+    delete:
+      enabled: true
+    http:
+      addr: :5000
+    proxy:
+      remoteurl: https://registry-1.docker.io
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: registry-docker-cache
+  namespace: arc-runners
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 20Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: registry-docker-cache
+  namespace: arc-runners
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: registry-docker-cache
+  template:
+    metadata:
+      labels:
+        app: registry-docker-cache
+    spec:
+      containers:
+        - name: registry
+          image: registry:2.8.3
+          args: [serve, /etc/docker/registry/config.yml]
+          ports:
+            - containerPort: 5000
+          volumeMounts:
+            - name: config
+              mountPath: /etc/docker/registry
+              readOnly: true
+            - name: cache
+              mountPath: /var/lib/registry
+      volumes:
+        - name: config
+          configMap:
+            name: registry-docker-cache-config
+        - name: cache
+          persistentVolumeClaim:
+            claimName: registry-docker-cache
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: registry-docker-cache
+  namespace: arc-runners
+spec:
+  selector:
+    app: registry-docker-cache
+  ports:
+    - port: 5000
+      targetPort: 5000
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: registry-mcr-images
+  namespace: arc-runners
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 20Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: registry-mcr-images
+  namespace: arc-runners
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: registry-mcr-images
+  template:
+    metadata:
+      labels:
+        app: registry-mcr-images
+    spec:
+      containers:
+        - name: registry
+          image: registry:2.8.3
+          ports:
+            - containerPort: 5000
+          volumeMounts:
+            - name: images
+              mountPath: /var/lib/registry
+      volumes:
+        - name: images
+          persistentVolumeClaim:
+            claimName: registry-mcr-images
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: registry-mcr-images
+  namespace: arc-runners
+spec:
+  selector:
+    app: registry-mcr-images
+  ports:
+    - port: 5000
+      targetPort: 5000
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: sync-dotnet-sdk-image
+  namespace: arc-runners
+spec:
+  schedule: "17 3 * * *"
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      activeDeadlineSeconds: 900
+      backoffLimit: 1
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: sync
+              image: quay.io/skopeo/stable:v1.15.2
+              args:
+                - copy
+                - --all
+                - --dest-tls-verify=false
+                - docker://mcr.microsoft.com/dotnet/sdk:10.0
+                - docker://registry-mcr-images.arc-runners.svc.cluster.local:5000/dotnet/sdk:10.0
+---
