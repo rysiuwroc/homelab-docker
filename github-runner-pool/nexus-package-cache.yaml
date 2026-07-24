@@ -76,7 +76,8 @@ spec:
                 sleep 5
               done
               curl -fsS -o /dev/null http://127.0.0.1:8081/service/rest/v1/status
-              if curl -fsS -o /dev/null "$package_url"; then
+              if ! test -s /nexus-data/admin.password && curl -fsS -o /dev/null "$package_url"; then
+                touch /tmp/bootstrap-ready
                 exec tail -f /dev/null
               fi
               if test -s /nexus-data/admin.password; then
@@ -108,10 +109,16 @@ spec:
               JSON
               code=$(curl --config "$auth" -sS -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' --data @"$payload" http://127.0.0.1:8081/service/rest/v1/repositories/nuget/proxy)
               test "$code" = 201 || test "$code" = 400
+              printf '{"id":"ci-nuget-proxy-read","name":"ci-nuget-proxy-read","description":"Anonymous read access limited to the NuGet proxy","privileges":["nx-repository-view-nuget-nuget-proxy-browse","nx-repository-view-nuget-nuget-proxy-read"],"roles":[]}' >"$payload"
+              code=$(curl --config "$auth" -sS -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' --data @"$payload" http://127.0.0.1:8081/service/rest/v1/security/roles)
+              test "$code" = 201 || test "$code" = 400
               openssl rand -base64 36 >"$anonymous_password"
-              printf '{"userId":"ci-nuget-anonymous","firstName":"CI","lastName":"Anonymous","emailAddress":"ci-nuget-anonymous@example.invalid","password":"%s","status":"active","roles":["nx-anonymous"]}' "$(tr -d '\n' <"$anonymous_password")" >"$payload"
+              printf '{"userId":"ci-nuget-anonymous","firstName":"CI","lastName":"Anonymous","emailAddress":"ci-nuget-anonymous@example.invalid","password":"%s","status":"active","roles":["ci-nuget-proxy-read"]}' "$(tr -d '\n' <"$anonymous_password")" >"$payload"
               code=$(curl --config "$auth" -sS -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' --data @"$payload" http://127.0.0.1:8081/service/rest/v1/security/users)
               test "$code" = 200 || test "$code" = 201 || test "$code" = 400
+              printf '{"userId":"ci-nuget-anonymous","firstName":"CI","lastName":"Anonymous","emailAddress":"ci-nuget-anonymous@example.invalid","source":"default","status":"active","roles":["ci-nuget-proxy-read"]}' >"$payload"
+              code=$(curl --config "$auth" -sS -o /dev/null -w '%{http_code}' -X PUT -H 'Content-Type: application/json' --data @"$payload" http://127.0.0.1:8081/service/rest/v1/security/users/ci-nuget-anonymous)
+              test "$code" = 204
               printf '{"enabled":true,"userId":"ci-nuget-anonymous","realmName":"NexusAuthorizingRealm"}' >"$payload"
               code=$(curl --config "$auth" -sS -o /dev/null -w '%{http_code}' -X PUT -H 'Content-Type: application/json' --data @"$payload" http://127.0.0.1:8081/service/rest/v1/security/anonymous)
               test "$code" = 200
@@ -122,7 +129,16 @@ spec:
                 test ! -e /nexus-data/admin.password
               fi
               unset admin_password
+              rm -f "$auth" "$payload" "$anonymous_password"
+              touch /tmp/bootstrap-ready
               exec tail -f /dev/null
+          readinessProbe:
+            exec:
+              command: ["/bin/sh", "-ec", "test -f /tmp/bootstrap-ready"]
+            initialDelaySeconds: 1
+            periodSeconds: 2
+            timeoutSeconds: 1
+            failureThreshold: 3
           volumeMounts:
             - name: data
               mountPath: /nexus-data
