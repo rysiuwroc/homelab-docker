@@ -70,12 +70,12 @@ spec:
               umask 077
               package_url=http://127.0.0.1:8081/repository/nuget-proxy/v3/content/0/microsoft.net.test.sdk/17.14.1/microsoft.net.test.sdk.17.14.1.nupkg
               for attempt in $(seq 1 120); do
-                if curl -fsS -o /dev/null http://127.0.0.1:8081/service/rest/v1/status; then
+                if curl -fsS -o /dev/null http://127.0.0.1:8081/service/rest/v1/status/writable; then
                   break
                 fi
                 sleep 5
               done
-              curl -fsS -o /dev/null http://127.0.0.1:8081/service/rest/v1/status
+              curl -fsS -o /dev/null http://127.0.0.1:8081/service/rest/v1/status/writable
               if ! test -s /nexus-data/admin.password && curl -fsS -o /dev/null "$package_url"; then
                 touch /tmp/bootstrap-ready
                 exec tail -f /dev/null
@@ -95,7 +95,7 @@ spec:
               curl --config "$auth" -fsS -o "$payload" http://127.0.0.1:8081/service/rest/v1/system/eula
               sed -i 's/"accepted"[[:space:]]*:[[:space:]]*false/"accepted":true/' "$payload"
               code=$(curl --config "$auth" -sS -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' --data @"$payload" http://127.0.0.1:8081/service/rest/v1/system/eula)
-              test "$code" = 200
+              test "$code" = 204
               cat >"$payload" <<'JSON'
               {
                 "name": "nuget-proxy",
@@ -111,7 +111,7 @@ spec:
               test "$code" = 201 || test "$code" = 400
               printf '{"id":"ci-nuget-proxy-read","name":"ci-nuget-proxy-read","description":"Anonymous read access limited to the NuGet proxy","privileges":["nx-repository-view-nuget-nuget-proxy-browse","nx-repository-view-nuget-nuget-proxy-read"],"roles":[]}' >"$payload"
               code=$(curl --config "$auth" -sS -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' --data @"$payload" http://127.0.0.1:8081/service/rest/v1/security/roles)
-              test "$code" = 201 || test "$code" = 400
+              test "$code" = 200 || test "$code" = 400
               openssl rand -base64 36 >"$anonymous_password"
               printf '{"userId":"ci-nuget-anonymous","firstName":"CI","lastName":"Anonymous","emailAddress":"ci-nuget-anonymous@example.invalid","password":"%s","status":"active","roles":["ci-nuget-proxy-read"]}' "$(tr -d '\n' <"$anonymous_password")" >"$payload"
               code=$(curl --config "$auth" -sS -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' --data @"$payload" http://127.0.0.1:8081/service/rest/v1/security/users)
