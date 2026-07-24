@@ -47,6 +47,8 @@ template:
             mountPath: /var/run
           - name: dind-externals
             mountPath: /home/runner/externals
+          - name: dind-storage
+            mountPath: /var/lib/docker
       - name: prewarm-ci-images
         image: docker@sha256:bfec1f5159c63a81ca6fdedbd81404d2c0e16378ed0feec3bb3fbf3998847659
         command:
@@ -57,12 +59,15 @@ template:
               registry-mcr-images.arc-runners.svc.cluster.local:5000/dotnet/sdk:10.0 \
               postgres:17-alpine
             do
-              if docker image inspect "$image" >/dev/null 2>&1; then
-                printf '%s\n' "Prewarm image already present: $image"
-              elif ! docker pull "$image"; then
-                printf '%s\n' "WARNING: could not prewarm $image; job startup will pull it instead." >&2
-              fi
+              (
+                if docker image inspect "$image" >/dev/null 2>&1; then
+                  printf '%s\n' "Prewarm image already present: $image"
+                elif ! docker pull "$image"; then
+                  printf '%s\n' "WARNING: could not prewarm $image; job startup will pull it instead." >&2
+                fi
+              ) &
             done
+            wait
         env:
           - name: DOCKER_HOST
             value: unix:///var/run/docker.sock
@@ -90,4 +95,6 @@ template:
       - name: dind-sock
         emptyDir: {}
       - name: dind-externals
+        emptyDir: {}
+      - name: dind-storage
         emptyDir: {}
