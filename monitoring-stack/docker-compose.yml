@@ -11,6 +11,12 @@ volumes:
   grafana-data:
     external: true
     name: monitoring_grafana-data
+  loki-data:
+    external: true
+    name: monitoring_loki-data
+  alloy-data:
+    external: true
+    name: monitoring_alloy-data
 
 x-exportarr: &exportarr
   image: ghcr.io/onedr0p/exportarr:v2.0.1
@@ -145,4 +151,37 @@ services:
       - --config.file=/etc/blackbox_exporter/config.yml
     volumes:
       - /home/rysiu/monitoring/blackbox.yml:/etc/blackbox_exporter/config.yml:ro
+    networks: [monitoring]
+
+  loki:
+    image: grafana/loki:3.7.6
+    container_name: loki
+    volumes:
+      - /home/rysiu/monitoring/loki-config.yaml:/etc/loki/local-config.yaml:ro
+      - loki-data:/loki
+    ports:
+      - "3100:3100"
+    restart: unless-stopped
+    networks: [monitoring]
+
+  alloy:
+    image: grafana/alloy:v1.18.1
+    container_name: alloy
+    command:
+      - run
+      - --server.http.listen-addr=0.0.0.0:12345
+      - --storage.path=/var/lib/alloy/data
+      - /etc/alloy/config.alloy
+    volumes:
+      - /home/rysiu/monitoring/alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /var/log/journal:/var/log/journal:ro
+      - /run/log/journal:/run/log/journal:ro
+      - /etc/machine-id:/etc/machine-id:ro
+      - alloy-data:/var/lib/alloy/data
+    ports:
+      - "12345:12345"
+      - "514:514/udp"
+    depends_on: [loki]
+    restart: unless-stopped
     networks: [monitoring]
