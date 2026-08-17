@@ -28,7 +28,7 @@ x-arr-common: &arr-common
 services:
   prowlarr:
     <<: *arr-common
-    image: lscr.io/linuxserver/prowlarr:latest
+    image: lscr.io/linuxserver/prowlarr:2.5.2.5491-ls156
     container_name: prowlarr
     volumes:
       - prowlarr_config:/config
