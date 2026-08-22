@@ -1,0 +1,160 @@
+crds:
+  create: false
+alloy:
+  enableReporting: false
+  storagePath: /var/lib/alloy
+  configMap:
+    create: true
+    content: |-
+      discovery.kubernetes "pods" {
+        role = "pod"
+        selectors {
+          role  = "pod"
+          field = "spec.nodeName=" + coalesce(sys.env("HOSTNAME"), constants.hostname) + ",status.phase!=Pending"
+        }
+      }
+      discovery.relabel "pods" {
+        targets = discovery.kubernetes.pods.targets
+        rule {
+          source_labels = ["__meta_kubernetes_namespace"]
+          target_label  = "namespace"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_name"]
+          target_label  = "pod"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_container_name"]
+          target_label  = "container"
+        }
+      }
+      loki.source.kubernetes "pods" {
+        targets    = discovery.relabel.pods.output
+        forward_to = [loki.process.pods.receiver]
+      }
+      loki.process "pods" {
+        stage.drop {
+          expression          = "^\\[WORKER "
+          drop_counter_reason = "runner_worker_telemetry"
+        }
+        stage.drop {
+          older_than          = "168h"
+          drop_counter_reason = "older_than_7d"
+        }
+        stage.static_labels {
+          values = { job = "k8s-pods" }
+        }
+        forward_to = [loki.relabel.pods.receiver]
+      }
+      loki.relabel "pods" {
+        forward_to = [loki.write.remote.receiver]
+        rule {
+          action = "labeldrop"
+          regex  = "instance|node|service_name"
+        }
+      }
+      loki.relabel "journal" {
+        forward_to = []
+        rule {
+          source_labels = ["__journal__systemd_unit"]
+          target_label  = "unit"
+        }
+        rule {
+          source_labels = ["__journal_priority_keyword"]
+          target_label  = "level"
+        }
+      }
+      loki.source.journal "k3s" {
+        forward_to    = [loki.process.journal.receiver]
+        matches       = "_SYSTEMD_UNIT=k3s.service"
+        max_age       = "24h"
+        relabel_rules = loki.relabel.journal.rules
+      }
+      loki.process "journal" {
+        stage.static_labels {
+          values = { job = "k3s-journal" }
+        }
+        forward_to = [loki.write.remote.receiver]
+      }
+      loki.write "remote" {
+        external_labels = {
+          site = "homelab",
+          host = "ci-k3s-01",
+        }
+        endpoint {
+          url = "http://192.168.0.212:3100/loki/api/v1/push"
+        }
+      }
+  mounts:
+    varlog: false
+    extra:
+      - name: var-log-journal
+        mountPath: /var/log/journal
+        readOnly: true
+      - name: machine-id
+        mountPath: /etc/machine-id
+        readOnly: true
+      - name: alloy-data
+        mountPath: /var/lib/alloy
+  resources:
+    requests:
+      cpu: "50m"
+      memory: "128Mi"
+    limits:
+      cpu: "500m"
+      memory: "512Mi"
+rbac:
+  create: false
+extraObjects:
+  - apiVersion: rbac.authorization.k8s.io/v1
+    kind: ClusterRole
+    metadata:
+      name: alloy
+      labels:
+        helm.sh/chart: alloy-1.11.1
+        app.kubernetes.io/name: alloy
+        app.kubernetes.io/instance: alloy
+        app.kubernetes.io/version: "v1.18.1"
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/part-of: alloy
+        app.kubernetes.io/component: rbac
+    rules:
+      - apiGroups: [""]
+        resources: ["pods", "pods/log", "namespaces"]
+        verbs: ["get", "list", "watch"]
+  - apiVersion: rbac.authorization.k8s.io/v1
+    kind: ClusterRoleBinding
+    metadata:
+      name: alloy
+      labels:
+        helm.sh/chart: alloy-1.11.1
+        app.kubernetes.io/name: alloy
+        app.kubernetes.io/instance: alloy
+        app.kubernetes.io/version: "v1.18.1"
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/part-of: alloy
+        app.kubernetes.io/component: rbac
+    roleRef:
+      apiGroup: rbac.authorization.k8s.io
+      kind: ClusterRole
+      name: alloy
+    subjects:
+      - kind: ServiceAccount
+        name: alloy
+        namespace: monitoring
+controller:
+  type: daemonset
+  priorityClassName: ci-monitoring
+  volumes:
+    extra:
+      - name: var-log-journal
+        hostPath:
+          path: /var/log/journal
+      - name: machine-id
+        hostPath:
+          path: /etc/machine-id
+          type: File
+      - name: alloy-data
+        hostPath:
+          path: /var/lib/alloy-k3s
+          type: DirectoryOrCreate
