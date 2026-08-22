@@ -42,7 +42,7 @@ services:
       EXEC: "0"
       GRPC: "0"
       IMAGES: "0"
-      LOG_LEVEL: "info"
+      LOG_LEVEL: "warning"
       NETWORKS: "0"
       NODES: "0"
       PLUGINS: "0"

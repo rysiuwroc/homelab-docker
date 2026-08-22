@@ -11,6 +11,9 @@ services:
       TZ: "Europe/Warsaw"
       MTX_RTSPTRANSPORTS: "tcp"
       MTX_WEBRTCADDITIONALHOSTS: "homeassistant.lan"
+      # 2 lines/min of RTSP open/close chatter from uptime-kuma's TCP-port monitor;
+      # warn keeps only real errors (MTX_LOGLEVEL maps to config logLevel).
+      MTX_LOGLEVEL: "warn"
     volumes:
       # mediamtx is a scratch image (no tzdata) — mount host zoneinfo so TZ resolves (logs -> CEST)
       - /usr/share/zoneinfo:/usr/share/zoneinfo:ro

@@ -16,7 +16,11 @@ services:
       - /home/rysiu/caddy/data:/data
       - /home/rysiu/caddy/config:/config
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS -o /dev/null http://localhost:2019/config/"]
+      # Healthcheck hits the public :80 edge, not the admin API on :2019 — a probe
+      # against /config/ was 100% of Caddy's log stream (logger=admin.api every 30s).
+      # Exit 0 on any HTTP response (Caddy answers 308 for HTTP->HTTPS here); curl
+      # fails only when Caddy is down.
+      test: ["CMD-SHELL", "curl -sS -o /dev/null http://localhost/"]
       interval: 30s
       timeout: 10s
       retries: 3

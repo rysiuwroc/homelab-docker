@@ -13,7 +13,7 @@ services:
     environment:
       - TZ=Europe/Warsaw
       - PORT=5055
-      - LOG_LEVEL=debug
+      - LOG_LEVEL=warn
     volumes:
       - jellyseerr-data:/app/config
     healthcheck:
