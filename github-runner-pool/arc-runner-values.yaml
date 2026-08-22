@@ -6,35 +6,79 @@ scaleSetLabels: [self-hosted, linux, x64, docker]
 controllerServiceAccount:
   namespace: arc-systems
   name: arc-gha-rs-controller
-minRunners: 7
-maxRunners: 15
+minRunners: 5
+maxRunners: 8
+listenerMetrics:
+  gauges:
+    gha_assigned_jobs:
+      labels: [name, namespace, repository, organization, enterprise]
+    gha_running_jobs:
+      labels: [name, namespace, repository, organization, enterprise]
+    gha_busy_runners:
+      labels: [name, namespace, repository, organization, enterprise]
+    gha_idle_runners:
+      labels: [name, namespace, repository, organization, enterprise]
+listenerTemplate:
+  spec:
+    priorityClassName: ci-control-plane
+    containers:
+      - name: listener
+        resources:
+          requests:
+            cpu: 250m
+            memory: 256Mi
+          limits:
+            cpu: 250m
+            memory: 256Mi
 template:
   spec:
+    priorityClassName: ci-runners
     initContainers:
       - name: init-dind-externals
-        image: local/arc-ci-runner:2026-07-23
+        image: local/arc-ci-runner:2026-07-26
         imagePullPolicy: Never
         command: ["cp", "-r", "/home/runner/externals/.", "/home/runner/tmpDir/"]
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+            ephemeral-storage: 64Mi
+          limits:
+            cpu: 250m
+            memory: 256Mi
         volumeMounts:
           - name: dind-externals
             mountPath: /home/runner/tmpDir
       - name: dind
         image: docker@sha256:bfec1f5159c63a81ca6fdedbd81404d2c0e16378ed0feec3bb3fbf3998847659
+        command: ["/bin/sh", "-c"]
         args:
-          - dockerd
-          - --host=unix:///var/run/docker.sock
-          - --group=$(DOCKER_GROUP_GID)
-          - --mtu=1450
-          - --registry-mirror=http://registry-docker-cache.arc-runners.svc.cluster.local:5000
-          - --insecure-registry=registry-docker-cache.arc-runners.svc.cluster.local:5000
-          - --insecure-registry=registry-mcr-images.arc-runners.svc.cluster.local:5000
-          - --default-network-opt=bridge=com.docker.network.driver.mtu=1450
+          - |
+            set -eu
+            parent="$(awk -F: '$1 == "0" { print $3; exit }' /proc/self/cgroup)"
+            test -n "$parent"
+            exec dockerd-entrypoint.sh dockerd \
+              --host=unix:///var/run/docker.sock \
+              --group="$DOCKER_GROUP_GID" \
+              --cgroup-parent="$parent" \
+              --mtu=1450 \
+              --registry-mirror=http://registry-docker-cache.arc-runners.svc.cluster.local:5000 \
+              --insecure-registry=registry-docker-cache.arc-runners.svc.cluster.local:5000 \
+              --insecure-registry=registry-mcr-images.arc-runners.svc.cluster.local:5000 \
+              --default-network-opt=bridge=com.docker.network.driver.mtu=1450
         env:
           - name: DOCKER_GROUP_GID
             value: "123"
         securityContext:
           privileged: true
         restartPolicy: Always
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+            ephemeral-storage: 3Gi
+          limits:
+            memory: 4Gi
         startupProbe:
           exec:
             command: [docker, info]
@@ -49,34 +93,9 @@ template:
             mountPath: /home/runner/externals
           - name: dind-storage
             mountPath: /var/lib/docker
-      - name: prewarm-ci-images
-        image: docker@sha256:bfec1f5159c63a81ca6fdedbd81404d2c0e16378ed0feec3bb3fbf3998847659
-        command:
-          - /bin/sh
-          - -ec
-          - |
-            for image in \
-              registry-mcr-images.arc-runners.svc.cluster.local:5000/dotnet/sdk:10.0 \
-              postgres:17-alpine
-            do
-              (
-                if docker image inspect "$image" >/dev/null 2>&1; then
-                  printf '%s\n' "Prewarm image already present: $image"
-                elif ! docker pull "$image"; then
-                  printf '%s\n' "WARNING: could not prewarm $image; job startup will pull it instead." >&2
-                fi
-              ) &
-            done
-            wait
-        env:
-          - name: DOCKER_HOST
-            value: unix:///var/run/docker.sock
-        volumeMounts:
-          - name: dind-sock
-            mountPath: /var/run
     containers:
       - name: runner
-        image: local/arc-ci-runner:2026-07-23
+        image: local/arc-ci-runner:2026-07-26
         imagePullPolicy: Never
         command: ["/home/runner/run.sh"]
         env:
@@ -84,14 +103,30 @@ template:
             value: unix:///var/run/docker.sock
           - name: RUNNER_WAIT_FOR_DOCKER_IN_SECONDS
             value: "120"
+        resources:
+          requests:
+            cpu: 100m
+            memory: 64Mi
+            ephemeral-storage: 1Gi
+          limits:
+            cpu: 4
+            memory: 9Gi
         volumeMounts:
           - name: work
             mountPath: /home/runner/_work
+          - name: scratch
+            mountPath: /tmp
           - name: dind-sock
             mountPath: /var/run
     volumes:
       - name: work
         emptyDir: {}
+      # Memory-backed scratch: the node's disk is rotational (7.12 ms fsync)
+      # and the suite's SQLite tests fsync per transaction.
+      - name: scratch
+        emptyDir:
+          medium: Memory
+          sizeLimit: 5Gi
       - name: dind-sock
         emptyDir: {}
       - name: dind-externals

@@ -1,0 +1,21 @@
+# Keep ARC metrics private to the cluster; Prometheus reaches the listener through
+# the authenticated Kubernetes API service proxy.
+metrics:
+  controllerManagerAddr: ":8081"
+  listenerAddr: ":8080"
+  listenerEndpoint: /metrics
+
+priorityClassName: ci-control-plane
+resources:
+  requests:
+    cpu: 250m
+    memory: 256Mi
+  limits:
+    cpu: 250m
+    memory: 256Mi
+
+flags:
+  # Controller --log-level feeds both the manager and the generated listener
+  # config (ghalistener log_level). info keeps the scaler lifecycle lines and
+  # drops the go-retryablehttp DEBUG long-poll spam from the listener.
+  logLevel: "info"
