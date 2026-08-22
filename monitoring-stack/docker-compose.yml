@@ -22,6 +22,10 @@ x-exportarr: &exportarr
   image: ghcr.io/onedr0p/exportarr:v2.0.1
   restart: unless-stopped
   networks: [monitoring]
+  # exportarr logs every *arr API call at INFO (7 requests per 15s per exporter);
+  # warn keeps only real problems — LOG_LEVEL is read from the env by exportarr v2.
+  environment:
+    LOG_LEVEL: "warn"
 
 services:
   prometheus:

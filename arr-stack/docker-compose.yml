@@ -106,6 +106,9 @@ services:
     networks: [arr_net]
     environment:
       TZ: "Europe/Warsaw"
+      # Env wins over config.toml's logLevel = "DEBUG" (loadFromEnv runs after file load);
+      # AUTOBRR__LOG_LEVEL is the double-underscore prefix autobrr actually reads.
+      AUTOBRR__LOG_LEVEL: "INFO"
     volumes:
       - autobrr_config:/config
     ports:
