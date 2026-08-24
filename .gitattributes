@@ -1,3 +1,8 @@
 # Monitoring configs are byte-mirrored to /home/rysiu/monitoring on .212 —
 # never translate their line endings (core.autocrlf=true in this repo).
 monitoring-stack/config/** -text
+
+# apply-config.sh is a POSIX sh script (#!/usr/bin/env sh) run directly from a
+# git-bash/Linux checkout — CRLF would break the shebang, so pin LF regardless
+# of core.autocrlf.
+monitoring-stack/apply-config.sh text eol=lf
