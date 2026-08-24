@@ -148,6 +148,34 @@ sudo k3s kubectl get priorityclass ci-control-plane ci-monitoring ci-runners \
 
 `kubectl apply --dry-run=server` reports these objects as `configured` rather than `unchanged` even when the cluster matches this file: the apiserver does not serialize the default `globalDefault: false`, so the explicit field always reads as a difference. That is a serialization artifact, not drift — do not "fix" it by deleting the field.
 
+## Cluster-state metrics
+
+`kube-state-metrics-values.yaml` is the reviewed configuration of the `monitoring/kube-state-metrics` Helm release on `ci-k3s-01`. Besides the 28 standard collectors it adds `customResourceState` metrics for the three ARC kinds — `kube_arc_autoscalingrunnerset_*`, `kube_arc_ephemeralrunnerset_*`, and `kube_arc_ephemeralrunner_*` (including `job_info`, which carries the GitHub job id, repository, workflow ref and run id of the job a runner is executing). Standard metrics deliberately copy no Kubernetes labels or annotations (`metricLabelsAllowlist`/`metricAnnotationsAllowList` are empty), so cardinality stays bounded.
+
+Two prerequisites must exist first, and neither failure is loud:
+
+- PriorityClass `ci-monitoring` (apply `arc-priority-classes.yaml`, above). Without it the pod stays `Pending` with `FailedScheduling: no PriorityClass with name ci-monitoring found`.
+- The `actions.github.com` CRDs (`autoscalingrunnersets`, `ephemeralrunnersets`, `ephemeralrunners`) — i.e. the ARC controller is already installed. Without them the `rbac.extraRules` and the whole `customResourceState` config are inert: the release installs and serves standard metrics, but no `kube_arc_*` series ever appear.
+
+Install or reconcile the release with the pinned chart version:
+
+```bash
+sudo env KUBECONFIG=/etc/rancher/k3s/k3s.yaml helm upgrade --install kube-state-metrics \
+  oci://ghcr.io/prometheus-community/charts/kube-state-metrics \
+  --version 8.0.0 --namespace monitoring --create-namespace \
+  --values github-runner-pool/kube-state-metrics-values.yaml --wait --timeout 180s
+```
+
+Verify the rendered collector list, the priority class, and that ARC series are being produced:
+
+```bash
+sudo k3s kubectl -n monitoring get deploy kube-state-metrics \
+  -o jsonpath='{.spec.template.spec.containers[0].args}{"\n"}{.spec.template.spec.priorityClassName}{"\n"}'
+sudo k3s kubectl -n monitoring get configmap kube-state-metrics-customresourcestate-config
+```
+
+Prometheus does not reach this endpoint directly. The Service stays `ClusterIP` and is scraped from the monitoring host `192.168.0.212` through the Kubernetes apiserver service proxy, authenticated as the `monitoring/prometheus-external-scrape` ServiceAccount created by `extraManifests` in this value file (it also grants that account `nodes/proxy` on `ci-k3s-01` for cAdvisor). The account's long-lived token lives only in the Secret `monitoring/prometheus-external-scrape-token` and in the Prometheus configuration on the monitoring host; it is host-side state and is never committed here. Re-uploading these values does not rotate the token, so scraping keeps working across `helm upgrade`.
+
 ## ARC runner image prewarm
 
 `arc-runner-values.yaml` prewarms the exact `.NET API tests` job-container and service-container image references — `registry-mcr-images.arc-runners.svc.cluster.local:5000/dotnet/sdk:10.0` and `postgres:17-alpine` — in parallel in each new runner's private DinD store before that runner registers. Its DinD graph uses a per-runner node-backed `emptyDir` mounted at `/var/lib/docker`, avoiding nested writable-layer copy-on-write while retaining ephemeral runner isolation. The prewarm is best-effort: a registry failure is logged but never prevents runner registration; GitHub Actions will then pull the image in the job as usual.
