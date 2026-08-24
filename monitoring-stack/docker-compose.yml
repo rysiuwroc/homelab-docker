@@ -39,6 +39,12 @@ services:
     volumes:
       - /home/rysiu/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - /home/rysiu/monitoring/secrets/ha_token:/etc/prometheus/ha_token:ro
+      # Bearer token + CA for the three ci-k3s-01 jobs that scrape through the
+      # kube-apiserver proxy. Until #46 these lived only in the container's
+      # writable layer, so any recreate silently killed those jobs. Host dir is
+      # root:nogroup 0750 with 0440 files; the container runs as uid/gid 65534
+      # (nobody/nogroup), so :ro is readable. See monitoring-stack/README.md.
+      - /home/rysiu/monitoring/secrets/k3s:/etc/prometheus/k3s:ro
       - prom-data:/prometheus
     ports:
       - "9090:9090"
