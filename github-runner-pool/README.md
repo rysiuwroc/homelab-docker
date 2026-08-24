@@ -136,6 +136,18 @@ sudo k3s kubectl get pods -n arc-runners -l app=nexus-package-cache
 
 The admin password remains only in the Kubernetes Secret and is used when future package proxy repositories need provisioning. Do not delete `nexus-data` except when intentionally discarding the package cache; doing so removes all cached packages and triggers the bootstrap again.
 
+## CI scheduling priority
+
+`arc-priority-classes.yaml` defines the three cluster-scoped PriorityClasses every ARC workload in this directory references: `ci-control-plane` (900000000) for the ARC controller and the scale-set listener, `ci-monitoring` (800000000) for cluster telemetry, and `ci-runners` (-100000, `preemptionPolicy: Never`) so ephemeral runners are the first workloads displaced under node memory pressure. Apply it **before** the `gha-runner-scale-set` `helm upgrade` below and **before** installing kube-state-metrics; a missing class leaves those pods `Pending` with `FailedScheduling: no PriorityClass with name ... found`.
+
+```bash
+sudo k3s kubectl apply -f github-runner-pool/arc-priority-classes.yaml
+sudo k3s kubectl get priorityclass ci-control-plane ci-monitoring ci-runners \
+  -o custom-columns=NAME:.metadata.name,VALUE:.value,PREEMPT:.preemptionPolicy
+```
+
+`kubectl apply --dry-run=server` reports these objects as `configured` rather than `unchanged` even when the cluster matches this file: the apiserver does not serialize the default `globalDefault: false`, so the explicit field always reads as a difference. That is a serialization artifact, not drift — do not "fix" it by deleting the field.
+
 ## ARC runner image prewarm
 
 `arc-runner-values.yaml` prewarms the exact `.NET API tests` job-container and service-container image references — `registry-mcr-images.arc-runners.svc.cluster.local:5000/dotnet/sdk:10.0` and `postgres:17-alpine` — in parallel in each new runner's private DinD store before that runner registers. Its DinD graph uses a per-runner node-backed `emptyDir` mounted at `/var/lib/docker`, avoiding nested writable-layer copy-on-write while retaining ephemeral runner isolation. The prewarm is best-effort: a registry failure is logged but never prevents runner registration; GitHub Actions will then pull the image in the job as usual.

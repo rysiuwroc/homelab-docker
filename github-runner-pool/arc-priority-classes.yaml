@@ -1,0 +1,29 @@
+# The three CI scheduling tiers were created by hand on 2026-08-01; this file is
+# the authoritative source so the cluster can be rebuilt from the repository.
+# Apply before the gha-runner-scale-set helm upgrade and before kube-state-metrics.
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: ci-control-plane
+value: 900000000
+globalDefault: false
+preemptionPolicy: PreemptLowerPriority
+description: Keeps ARC control components available before CI runner workloads.
+---
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: ci-monitoring
+value: 800000000
+globalDefault: false
+preemptionPolicy: PreemptLowerPriority
+description: Keeps cluster-state telemetry available during CI saturation.
+---
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: ci-runners
+value: -100000
+globalDefault: false
+preemptionPolicy: Never
+description: Makes ephemeral CI runners the first workloads displaced under pressure.
