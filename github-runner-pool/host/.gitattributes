@@ -1,0 +1,9 @@
+# Copied verbatim from the K3s/ARC host ci-k3s-01 (192.168.0.66) and must stay
+# byte-identical to what is deployed there. Force LF regardless of local
+# core.autocrlf so Windows checkouts never corrupt them.
+k3s-overload-protection.yaml text eol=lf
+k3s-overload-protection.conf text eol=lf
+ssh-overload-protection.conf text eol=lf
+node-exporter-overload-protection.conf text eol=lf
+system-slice-overload-protection.conf text eol=lf
+prometheus-node-exporter.defaults text eol=lf
