@@ -58,7 +58,17 @@ jobs:
           for f in "${files[@]}"; do
             echo "::group::$f"
             if docker compose -f "$f" config --quiet; then
-              echo "ok: $f"
+              bad=$(docker compose -f "$f" config 2>/dev/null \
+                | sed -n 's/^[[:space:]]*container_name:[[:space:]]*//p' \
+                | tr -d '"' | sed '/^$/d' \
+                | sed '/^[a-zA-Z0-9][a-zA-Z0-9_.-]*$/d')
+              if [ -n "$bad" ]; then
+                echo "::error file=$f::illegal resolved container_name(s) in $f: $bad"
+                echo "  (a dangling list item fused into container_name — check for a missing command:/entrypoint: key)"
+                fail=1
+              else
+                echo "ok: $f"
+              fi
             else
               echo "::error file=$f::docker compose config failed for $f"
               fail=1
