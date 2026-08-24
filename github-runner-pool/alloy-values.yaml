@@ -41,6 +41,28 @@ alloy:
           older_than          = "168h"
           drop_counter_reason = "older_than_7d"
         }
+        // runner v2.336.0 nie ma RUNNER_LOG_LEVEL — [RUNNER ] to 7 114 linii/d
+        stage.drop {
+          expression          = "^\\[RUNNER "
+          drop_counter_reason = "runner_listener_telemetry"
+        }
+        // k3s coredns: ostrzezenie o nieistniejacym opcjonalnym imporcie, 6 625 linii/d
+        stage.match {
+          selector = `{namespace="kube-system"}`
+          stage.drop {
+            expression          = `No files matching import glob pattern`
+            drop_counter_reason = "coredns_optional_import_noise"
+          }
+        }
+        // listener ARC: heartbeat long-polla + dump patcha (Compare) — 2 700 linii/d;
+        // "Calculated target runner count" / "Ephemeral runner set scaled." zostaja
+        stage.match {
+          selector = `{namespace="arc-systems"}`
+          stage.drop {
+            expression          = `msg=("Getting next message"|Compare)`
+            drop_counter_reason = "arc_listener_heartbeat_noise"
+          }
+        }
         stage.static_labels {
           values = { job = "k8s-pods" }
         }
