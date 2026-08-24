@@ -1,0 +1,13 @@
+# Source of truth: homelab-docker/monitoring-stack/config/grafana/provisioning/datasources/loki.yml.
+# Do not edit on the host — edit in git and run monitoring-stack/apply-config.sh.
+apiVersion: 1
+
+datasources:
+  - name: Loki
+    type: loki
+    uid: loki-homelab
+    access: proxy
+    url: http://loki:3100
+    isDefault: false
+    jsonData:
+      maxLines: 2000

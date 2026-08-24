@@ -1,0 +1,61 @@
+# Source of truth: homelab-docker/monitoring-stack/config/loki-config.yaml.
+# Do not edit on the host — edit in git and run monitoring-stack/apply-config.sh.
+# grafana/loki:3.7.6, single binary (-target=all), filesystem storage, retencja wymuszona.
+auth_enabled: false
+server:
+  # 3.7.6 loguje KAZDE zapytanie na info (metrics.go:285 / engine.go:274, bez progu w schema) —
+  # jedyny zrodlowy knob na te ~1,2M linii/d to poziom logowania; warn zostawia bledy i ostrzezenia.
+  log_level: warn
+
+common:
+  instance_addr: 127.0.0.1
+  path_prefix: /loki
+  storage:
+    filesystem:
+      chunks_directory: /loki/chunks
+  replication_factor: 1
+  ring:
+    kvstore:
+      store: inmemory
+
+schema_config:
+  configs:
+    - from: 2026-08-01
+      store: tsdb
+      object_store: filesystem
+      schema: v13
+      index:
+        prefix: index_
+        period: 24h
+
+compactor:
+  working_directory: /loki/compactor
+  compaction_interval: 10m
+  retention_enabled: true
+  retention_delete_delay: 2h
+  retention_delete_worker_count: 150
+  delete_request_store: filesystem
+
+ruler:
+  storage:
+    type: local
+    local:
+      directory: /loki/ruler
+  rule_path: /loki/rules-tmp
+
+frontend:
+  # prog logowania wolnych zapytan: 0 = wylaczone, <0 = wszystkie, >0 = tylko wolniejsze niz X
+  log_queries_longer_than: 5s
+limits_config:
+  retention_period: 336h
+  retention_stream:
+    - selector: '{level="debug"}'
+      priority: 10
+      period: 24h
+    - selector: '{level=~"error|crit|alert|emerg"}'
+      priority: 5
+      period: 1440h
+  # service_name duplikowal container/job; zadna tablica Grafana go nie uzywa (zweryfikowano) — pusta lista wylacza
+  discover_service_name: []
+  # detected_level to ten sam mechanizm (discover_log_levels); audit: "detected_level klamie", zadna tablica go nie uzywa
+  discover_log_levels: false

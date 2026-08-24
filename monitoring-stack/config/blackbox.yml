@@ -1,0 +1,8 @@
+# Source of truth: homelab-docker/monitoring-stack/config/blackbox.yml.
+# Do not edit on the host — edit in git and run monitoring-stack/apply-config.sh.
+modules:
+  icmp:
+    prober: icmp
+    timeout: 5s
+    icmp:
+      preferred_ip_protocol: ip4

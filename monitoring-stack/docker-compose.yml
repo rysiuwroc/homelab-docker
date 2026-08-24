@@ -36,6 +36,9 @@ services:
       - --storage.tsdb.path=/prometheus
       - --storage.tsdb.retention.time=180d
       - --web.enable-lifecycle
+    # Config content for this stack is versioned in monitoring-stack/config/ and
+    # pushed to these host paths by monitoring-stack/apply-config.sh — Portainer's
+    # git checkout lives under /data/compose/<id>/<sha>/, so it can't be bound.
     volumes:
       - /home/rysiu/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - /home/rysiu/monitoring/secrets/ha_token:/etc/prometheus/ha_token:ro
