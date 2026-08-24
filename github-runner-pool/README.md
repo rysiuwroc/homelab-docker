@@ -161,6 +161,48 @@ runner=$(sudo k3s kubectl get pod -n arc-runners -l app.kubernetes.io/component=
 sudo k3s kubectl logs -n arc-runners "$runner" -c prewarm-ci-images
 ```
 
+## Host overload protection (ci-k3s-01)
+
+`ci-k3s-01` (`192.168.0.66`, Ubuntu 24.04, k3s v1.36.2+k3s1, 16 vCPU, Hyper-V dynamic memory) is the ARC/K3s host for the `linux-docker-ci` scale set. These six files keep K3s, SSH and node-exporter alive while up to six CI jobs saturate memory and I/O. They are host-resident: no stack redeploy ships them, so a host rebuild must reinstall them from this directory.
+
+Install with `sudo install -D -o root -g root -m 0644 <repo file> <host path>` (all six live host files are `0644 root:root`).
+
+| Repo file | Host path | Activation |
+| --- | --- | --- |
+| `host/k3s-overload-protection.yaml` | `/etc/rancher/k3s/config.yaml` | `sudo systemctl restart k3s` — **interrupts every running job** |
+| `host/k3s-overload-protection.conf` | `/etc/systemd/system/k3s.service.d/99-overload-protection.conf` | `sudo systemctl daemon-reload && sudo systemctl restart k3s` — **interrupts every running job** |
+| `host/ssh-overload-protection.conf` | `/etc/systemd/system/ssh.service.d/99-overload-protection.conf` | `sudo systemctl daemon-reload && sudo systemctl restart ssh` (keep a second session open; existing sessions survive) |
+| `host/node-exporter-overload-protection.conf` | `/etc/systemd/system/prometheus-node-exporter.service.d/99-overload-protection.conf` | `sudo systemctl daemon-reload && sudo systemctl restart prometheus-node-exporter` |
+| `host/system-slice-overload-protection.conf` | `/etc/systemd/system/system.slice.d/99-overload-protection.conf` | `sudo systemctl daemon-reload`, then confirm `/sys/fs/cgroup/system.slice/memory.min` is `637534208`; if it did not change, `sudo systemctl set-property system.slice MemoryMin=608M MemoryLow=1216M` |
+| `host/prometheus-node-exporter.defaults` | `/etc/default/prometheus-node-exporter` | `sudo systemctl restart prometheus-node-exporter` (brief scrape gap; the `node-ci-k3s-01` target on `.212` flaps for one interval) |
+
+`/etc/rancher/k3s/config.yaml` is the **whole** k3s config file on this host, not a fragment, so a future k3s setting is added to this repo file rather than appended on the host.
+
+Why the numbers are what they are:
+
+- `system-reserved=cpu=500m,memory=512Mi` — carves the non-Kubernetes host out of allocatable: sshd, node-exporter, journald, the SSH sessions used to diagnose an incident.
+- `kube-reserved=cpu=500m,memory=1Gi` — k3s server is one process holding apiserver, kine/etcd, scheduler and controller-manager, plus containerd and kubelet; 1Gi is that resident set with headroom, so the scheduler cannot pack pods into memory the control plane is already using.
+- `eviction-hard=memory.available<1Gi,…` — kubelet must pick the victim (a runner pod) before the kernel OOM killer picks one by heuristic. Supplying `eviction-hard` **replaces** the kubelet defaults, so the `nodefs`/`imagefs`/inode thresholds are restated verbatim; dropping them would silently disable disk eviction.
+- `eviction-soft=memory.available<1500Mi` with `eviction-soft-grace-period=memory.available=2m` — a 500Mi band above the hard floor where a transient CI spike (a `dotnet test` or `docker build` peak) has two minutes to resolve itself before costing a job. `eviction-max-pod-grace-period=30` bounds the graceful kill; the 2-minute grace is a soft-eviction property only, hard eviction is immediate.
+- `eviction-pressure-transition-period=30s` — stops `MemoryPressure` from flapping and thereby stops the scheduler from oscillating between accepting and rejecting runners.
+- `OOMScoreAdjust`: SSH `-1000` (OOM-immune — remote login is the only way back into the host, and `oom_score_adj` is inherited by forked children, so the login shell and job of an interactive session inherit `-1000` even though their cgroup is `user.slice`); k3s `-999` (one notch below, so in a truly unrecoverable state the kernel reaps k3s before it reaps the way in); node-exporter `-900` (telemetry must outlive runner pods but must never outrank the control plane).
+- `CPUWeight=10000` on k3s and SSH against the default `100` — roughly a hundredfold share under contention, enough for the apiserver to answer and a shell to echo while 16 vCPU are pinned. node-exporter gets `1000`: a scrape is cheap. `IOWeight=1000` (the maximum) on all three because the measured failure mode was I/O starvation, not CPU.
+- `system.slice` `MemoryMin=608M` / `MemoryLow=1216M` — on cgroup v2 a child's memory protection is clamped by every ancestor, so without a slice-level budget the per-service `MemoryMin` values are silently ineffective. 608M is exactly the sum of the protected children (512 + 64 + 32) and 1216M exactly the sum of their `MemoryLow` (1024 + 128 + 64); adding a protected service means raising both sums.
+- node-exporter `ARGS` — binds the LAN address so Prometheus on `.212` scrapes it directly as job `node-ci-k3s-01` (a path that survives a K3s or apiserver outage); `--collector.disable-defaults` plus a narrow collector list keeps the exporter cheap exactly when the host is overloaded; `pressure` is the PSI collector that overload diagnosis depends on; `--collector.systemd.unit-include` restricts the systemd collector to `k3s|ssh|prometheus-node-exporter` instead of enumerating every unit each scrape. Deleting or drifting this file silently changes the metric set that the overload dashboards and analyses stand on.
+
+Verify the repo matches the host (byte-identical, read-only):
+
+```bash
+diff <(ssh rysiu@192.168.0.66 'sudo cat /etc/rancher/k3s/config.yaml') github-runner-pool/host/k3s-overload-protection.yaml
+diff <(ssh rysiu@192.168.0.66 'sudo cat /etc/systemd/system/k3s.service.d/99-overload-protection.conf') github-runner-pool/host/k3s-overload-protection.conf
+diff <(ssh rysiu@192.168.0.66 'sudo cat /etc/systemd/system/ssh.service.d/99-overload-protection.conf') github-runner-pool/host/ssh-overload-protection.conf
+diff <(ssh rysiu@192.168.0.66 'sudo cat /etc/systemd/system/prometheus-node-exporter.service.d/99-overload-protection.conf') github-runner-pool/host/node-exporter-overload-protection.conf
+diff <(ssh rysiu@192.168.0.66 'sudo cat /etc/systemd/system/system.slice.d/99-overload-protection.conf') github-runner-pool/host/system-slice-overload-protection.conf
+diff <(ssh rysiu@192.168.0.66 'sudo cat /etc/default/prometheus-node-exporter') github-runner-pool/host/prometheus-node-exporter.defaults
+```
+
+If a shell lacks process substitution, compare checksums instead: the repo files must hash to `98ad67a3a4ade55b858b343752ef9f91`, `cb49dff28fb877ae4df5c674b7bbb2c2`, `c1f9a67ebcdea5a41f58dc6307fdfc1e`, `58f2dceb0b5bdc381b69734de3c842f7`, `755a5c4ba912208f4acde8ad80a019d9`, `c7f4ca2660183a82dc38c31402d785b0` respectively (`md5sum github-runner-pool/host/*`). A mismatch on the last one is almost always the doubled backslash or a CRLF.
+
 ## Security and fork restrictions
 
 These runners have access to the host Docker socket, which is equivalent to high privilege on the Docker host. Configure `linux-docker-ci` access for all current and future repositories in the `MRysiukiewicz` organization as required, but use it only for trusted private repositories and never for arbitrary public or untrusted workflows. Require approval for fork pull requests and do not expose these runners or secrets to unreviewed fork code. Avoid `pull_request_target` workflows that check out untrusted fork code with privileged credentials. Review workflow changes before merging and keep job permissions least-privileged.

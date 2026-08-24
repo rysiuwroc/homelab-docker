@@ -1,0 +1,1 @@
+ARGS="--web.listen-address=192.168.0.66:9100 --collector.disable-defaults --collector.cpu --collector.diskstats --collector.filesystem --collector.loadavg --collector.meminfo --collector.pressure --collector.stat --collector.vmstat --collector.systemd --collector.systemd.unit-include=(k3s|ssh|prometheus-node-exporter)\\.service"
