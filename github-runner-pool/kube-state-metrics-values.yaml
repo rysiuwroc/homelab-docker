@@ -1,0 +1,253 @@
+replicas: 1
+service:
+  type: ClusterIP
+  port: 8080
+priorityClassName: ci-monitoring
+resources:
+  requests:
+    cpu: 200m
+    memory: 256Mi
+  limits:
+    cpu: 200m
+    memory: 256Mi
+# Do not copy arbitrary Kubernetes labels or annotations into standard KSM metrics.
+metricLabelsAllowlist: []
+metricAnnotationsAllowList: []
+collectors:
+  - certificatesigningrequests
+  - configmaps
+  - cronjobs
+  - daemonsets
+  - deployments
+  - endpointslices
+  - horizontalpodautoscalers
+  - ingresses
+  - jobs
+  - leases
+  - limitranges
+  - mutatingwebhookconfigurations
+  - namespaces
+  - networkpolicies
+  - nodes
+  - persistentvolumeclaims
+  - persistentvolumes
+  - poddisruptionbudgets
+  - pods
+  - replicasets
+  - replicationcontrollers
+  - resourcequotas
+  - secrets
+  - services
+  - statefulsets
+  - storageclasses
+  - validatingwebhookconfigurations
+  - volumeattachments
+rbac:
+  create: true
+  useClusterRole: true
+  extraRules:
+    - apiGroups: ["actions.github.com"]
+      resources:
+        - autoscalingrunnersets
+        - ephemeralrunnersets
+        - ephemeralrunners
+      verbs: ["list", "watch"]
+customResourceState:
+  enabled: true
+  create: true
+  config:
+    kind: CustomResourceStateMetrics
+    spec:
+      resources:
+        - groupVersionKind:
+            group: actions.github.com
+            version: v1alpha1
+            kind: AutoscalingRunnerSet
+          metricNamePrefix: kube_arc_autoscalingrunnerset
+          labelsFromPath:
+            organization: [metadata, labels, "actions.github.com/organization"]
+            scale_set_name: [metadata, labels, "actions.github.com/scale-set-name"]
+            scale_set_namespace: [metadata, labels, "actions.github.com/scale-set-namespace"]
+          metrics:
+            - name: spec_min_runners
+              help: Configured minimum runners for an ARC AutoscalingRunnerSet.
+              each:
+                type: Gauge
+                gauge:
+                  path: [spec, minRunners]
+            - name: spec_max_runners
+              help: Configured maximum runners for an ARC AutoscalingRunnerSet.
+              each:
+                type: Gauge
+                gauge:
+                  path: [spec, maxRunners]
+            - name: status_current_runners
+              help: Current runners reported by an ARC AutoscalingRunnerSet.
+              each:
+                type: Gauge
+                gauge:
+                  path: [status, currentRunners]
+            - name: status_pending_ephemeral_runners
+              help: Pending ephemeral runners reported by an ARC AutoscalingRunnerSet.
+              each:
+                type: Gauge
+                gauge:
+                  path: [status, pendingEphemeralRunners]
+            - name: status_running_ephemeral_runners
+              help: Running ephemeral runners reported by an ARC AutoscalingRunnerSet.
+              each:
+                type: Gauge
+                gauge:
+                  path: [status, runningEphemeralRunners]
+            - name: status_phase
+              help: Phase of an ARC AutoscalingRunnerSet.
+              each:
+                type: StateSet
+                stateSet:
+                  labelName: phase
+                  path: [status, phase]
+                  list: [Pending, Running, Succeeded, Failed, Unknown, Outdated]
+        - groupVersionKind:
+            group: actions.github.com
+            version: v1alpha1
+            kind: EphemeralRunnerSet
+          metricNamePrefix: kube_arc_ephemeralrunnerset
+          labelsFromPath:
+            organization: [metadata, labels, "actions.github.com/organization"]
+            scale_set_name: [metadata, labels, "actions.github.com/scale-set-name"]
+            scale_set_namespace: [metadata, labels, "actions.github.com/scale-set-namespace"]
+          metrics:
+            - name: status_current_replicas
+              help: Current EphemeralRunner resources reported by an ARC EphemeralRunnerSet.
+              each:
+                type: Gauge
+                gauge:
+                  path: [status, currentReplicas]
+            - name: status_pending_ephemeral_runners
+              help: Pending ephemeral runners reported by an ARC EphemeralRunnerSet.
+              each:
+                type: Gauge
+                gauge:
+                  path: [status, pendingEphemeralRunners]
+            - name: status_running_ephemeral_runners
+              help: Running ephemeral runners reported by an ARC EphemeralRunnerSet.
+              each:
+                type: Gauge
+                gauge:
+                  path: [status, runningEphemeralRunners]
+            - name: status_phase
+              help: Phase of an ARC EphemeralRunnerSet.
+              each:
+                type: StateSet
+                stateSet:
+                  labelName: phase
+                  path: [status, phase]
+                  list: [Pending, Running, Succeeded, Failed, Unknown, Outdated]
+        - groupVersionKind:
+            group: actions.github.com
+            version: v1alpha1
+            kind: EphemeralRunner
+          metricNamePrefix: kube_arc_ephemeralrunner
+          labelsFromPath:
+            organization: [metadata, labels, "actions.github.com/organization"]
+            scale_set_name: [metadata, labels, "actions.github.com/scale-set-name"]
+            scale_set_namespace: [metadata, labels, "actions.github.com/scale-set-namespace"]
+            pod: [metadata, name]
+          metrics:
+            - name: status_ready
+              help: Whether an ARC EphemeralRunner is ready.
+              each:
+                type: Gauge
+                gauge:
+                  path: [status, ready]
+            - name: status_phase
+              help: Phase of an ARC EphemeralRunner.
+              each:
+                type: StateSet
+                stateSet:
+                  labelName: phase
+                  path: [status, phase]
+                  list: [Pending, Running, Succeeded, Failed, Unknown, Outdated]
+            - name: job_info
+              help: Current GitHub Actions job assigned to an ARC EphemeralRunner.
+              each:
+                type: Info
+                info:
+                  path: [status]
+                  labelsFromPath:
+                    runner_name: [runnerName]
+                    job_id: [jobId]
+                    job_repository_name: [jobRepositoryName]
+                    job_workflow_ref: [jobWorkflowRef]
+                    workflow_run_id: [workflowRunId]
+                    job_display_name: [jobDisplayName]
+            - name: deletion_timestamp
+              help: Unix timestamp when an ARC EphemeralRunner entered deletion.
+              errorLogV: 10
+              each:
+                type: Gauge
+                gauge:
+                  path: [metadata, deletionTimestamp]
+extraManifests:
+  - apiVersion: v1
+    kind: ServiceAccount
+    metadata:
+      name: prometheus-external-scrape
+      namespace: monitoring
+    automountServiceAccountToken: false
+  - apiVersion: rbac.authorization.k8s.io/v1
+    kind: Role
+    metadata:
+      name: prometheus-external-scrape
+      namespace: monitoring
+    rules:
+      - apiGroups: [""]
+        resources: ["services"]
+        resourceNames: ["kube-state-metrics", "http:kube-state-metrics:8080"]
+        verbs: ["get"]
+      - apiGroups: [""]
+        resources: ["services/proxy"]
+        resourceNames: ["kube-state-metrics", "http:kube-state-metrics:8080"]
+        verbs: ["get"]
+  - apiVersion: rbac.authorization.k8s.io/v1
+    kind: RoleBinding
+    metadata:
+      name: prometheus-external-scrape
+      namespace: monitoring
+    subjects:
+      - kind: ServiceAccount
+        name: prometheus-external-scrape
+        namespace: monitoring
+    roleRef:
+      apiGroup: rbac.authorization.k8s.io
+      kind: Role
+      name: prometheus-external-scrape
+  - apiVersion: v1
+    kind: Secret
+    metadata:
+      name: prometheus-external-scrape-token
+      namespace: monitoring
+      annotations:
+        kubernetes.io/service-account.name: prometheus-external-scrape
+    type: kubernetes.io/service-account-token
+  - apiVersion: rbac.authorization.k8s.io/v1
+    kind: ClusterRole
+    metadata:
+      name: prometheus-external-cadvisor-scrape
+    rules:
+      - apiGroups: [""]
+        resources: ["nodes/proxy"]
+        resourceNames: ["ci-k3s-01"]
+        verbs: ["get"]
+  - apiVersion: rbac.authorization.k8s.io/v1
+    kind: ClusterRoleBinding
+    metadata:
+      name: prometheus-external-cadvisor-scrape
+    subjects:
+      - kind: ServiceAccount
+        name: prometheus-external-scrape
+        namespace: monitoring
+    roleRef:
+      apiGroup: rbac.authorization.k8s.io
+      kind: ClusterRole
+      name: prometheus-external-cadvisor-scrape
