@@ -14,17 +14,15 @@ set -eu
 HOST="${MONITORING_HOST:-rysiu@192.168.0.212}"
 DEST=/home/rysiu/monitoring
 CFG="$(CDPATH= cd -- "$(dirname -- "$0")/config" && pwd)"
-FILES="prometheus.yml blackbox.yml loki-config.yaml alloy/config.alloy
-grafana/provisioning/datasources/prometheus.yml
-grafana/provisioning/datasources/loki.yml"
+FILES="prometheus.yml blackbox.yml loki-config.yaml alloy/config.alloy grafana/provisioning/datasources/prometheus.yml grafana/provisioning/datasources/loki.yml"
 
 MODE=apply
 [ "${1:-}" = "--check" ] && MODE=check
 
 tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
 cd "$CFG"
-md5sum $FILES > "$tmp/local"
-ssh "$HOST" "cd $DEST && md5sum $FILES 2>/dev/null" > "$tmp/remote" || true
+md5sum -t $FILES > "$tmp/local"
+ssh "$HOST" "cd $DEST && md5sum -t $FILES 2>/dev/null" > "$tmp/remote" || true
 
 changed=""
 for f in $FILES; do
