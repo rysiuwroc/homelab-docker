@@ -1,0 +1,3 @@
+# Monitoring configs are byte-mirrored to /home/rysiu/monitoring on .212 —
+# never translate their line endings (core.autocrlf=true in this repo).
+monitoring-stack/config/** -text

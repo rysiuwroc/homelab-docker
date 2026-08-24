@@ -1,0 +1,177 @@
+// Grafana Alloy v1.18.1 — kolektor logów hosta docker (.212)
+
+// ---- Kontenery Docker ----------------------------------------
+discovery.docker "containers" {
+  host             = "unix:///var/run/docker.sock"
+  refresh_interval = "30s"
+}
+
+discovery.relabel "containers" {
+  targets = discovery.docker.containers.targets
+
+  // Docker API zwraca nazwy z wiodącym ukośnikiem ("/grafana") — obciąć.
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/(.*)"
+    target_label  = "container"
+  }
+
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_project"]
+    target_label  = "stack"
+  }
+}
+
+loki.process "docker_clean" {
+  stage.drop {
+    expression          = `(GET|POST|HEAD) /(-/healthy|-/ready|healthz?|readyz?|api/health|metrics)(\?\S*)?\s`
+    drop_counter_reason = "healthcheck_noise"
+  }
+  // adguard-exporter: brak knoba w aplikacji (GitOpsLogLevels zweryfikowal), tick co 10s = ~8,6k linii/d
+  stage.match {
+    selector = `{container="adguard-exporter"}`
+    stage.drop {
+      expression          = `New tick of statistics`
+      drop_counter_reason = "adguard_exporter_tick_noise"
+    }
+  }
+  // prowlarr: kazda strona kazdego szukania na Info (10 981 linii/d z 10 987);
+  // aplikacja nie ma poziomu nizszego niz Info — historia szukan zostaje w UI Prowlarra
+  stage.match {
+    selector = `{container="prowlarr"}`
+    stage.drop {
+      expression          = `ReleaseSearchService: Searching indexer`
+      drop_counter_reason = "prowlarr_search_pagination_noise"
+    }
+  }
+  stage.json {
+    expressions = {
+      level = "level",
+    }
+  }
+  stage.labels {
+    values = { level = "level" }
+  }
+  stage.static_labels {
+    values = { job = "docker" }
+  }
+  forward_to = [loki.write.local.receiver]
+}
+
+loki.source.docker "containers" {
+  host       = "unix:///var/run/docker.sock"
+  targets    = discovery.relabel.containers.output
+  forward_to = [loki.process.docker_clean.receiver]
+}
+
+// ---- journald hosta -------------------------------------------
+loki.relabel "journal" {
+  forward_to = []
+
+  rule {
+    source_labels = ["__journal__systemd_unit"]
+    target_label  = "unit"
+  }
+  rule {
+    source_labels = ["__journal_priority_keyword"]
+    target_label  = "level"
+  }
+}
+
+loki.source.journal "read" {
+  forward_to    = [loki.process.journal_label.receiver]
+  max_age       = "24h"
+  labels        = { job = "journal" }
+  relabel_rules = loki.relabel.journal.rules
+}
+
+loki.process "journal_label" {
+  // 60s loop: cron (hc-ping) + qbit-scratch-guard — ~8,6k linii/d, tylko te wzorce
+  stage.drop {
+    expression          = `pam_unix\(cron:session\): session (opened|closed) for user rysiu`
+    drop_counter_reason = "cron_session_noise"
+  }
+  stage.drop {
+    expression          = `\(rysiu\) CMD \(curl -fsS -m 10 https://hc-ping\.com/`
+    drop_counter_reason = "cron_hcping_noise"
+  }
+  stage.drop {
+    expression          = `qbit-scratch-guard\.service`
+    drop_counter_reason = "qbit_scratch_guard_noise"
+  }
+  // docker.service: benignny szum dockerd 29.5.2 (sigstore vs manifest list v2) — DockerHostOps udowodnil ze pull przechodzi
+  stage.drop {
+    expression          = `failed to validate image signature.*expected image index descriptor, got application/vnd\.docker\.distribution\.manifest\.(list\.)?v2\+json`
+    drop_counter_reason = "docker_signature_validation_noise"
+  }
+  stage.static_labels {
+    values = { job = "journal" }
+  }
+  forward_to = [loki.write.local.receiver]
+}
+
+// ---- Syslog z OpenWrt (RFC3164, UDP :514) ---------------------
+loki.relabel "syslog" {
+  forward_to = []
+
+  rule {
+    source_labels = ["__syslog_message_app_name"]
+    target_label  = "unit"
+  }
+  rule {
+    source_labels = ["__syslog_message_severity"]
+    target_label  = "level"
+  }
+  rule {
+    source_labels = ["__syslog_message_severity"]
+    regex         = "informational"
+    replacement   = "info"
+    target_label  = "level"
+  }
+}
+
+loki.process "syslog_clean" {
+  // netifd: udhcpc renew WAN co ~2-5 min (krotki lease CGNAT) — 333 linii/d
+  stage.drop {
+    expression          = `udhcpc: sending renew`
+    drop_counter_reason = "wan_dhcp_renew_noise"
+  }
+  // tailscaled: roaming peerow, syslog nadaje im severity error — 317 linii/d
+  stage.drop {
+    expression          = `(magicsock: disco:|does not know about peer)`
+    drop_counter_reason = "tailscale_roaming_noise"
+  }
+  // crond: unbound-statfile co 10 min — 146 linii/d
+  stage.drop {
+    expression          = `cmd /usr/bin/unbound-statfile`
+    drop_counter_reason = "cron_unbound_statfile_noise"
+  }
+  forward_to = [loki.write.local.receiver]
+}
+
+loki.source.syslog "openwrt" {
+  listener {
+    address                = "0.0.0.0:514"
+    protocol               = "udp"
+    syslog_format          = "rfc3164"
+    use_incoming_timestamp = false
+    labels                 = { job = "syslog", host = "openwrt" }
+  }
+  relabel_rules = loki.relabel.syslog.rules
+  forward_to    = [loki.process.syslog_clean.receiver]
+}
+
+// ---- Wysyłka do Loki ------------------------------------------
+loki.write "local" {
+  external_labels = {
+    site = "homelab",
+    host = "docker-host",
+  }
+
+  endpoint {
+    url            = "http://loki:3100/loki/api/v1/push"
+    batch_wait     = "2s"
+    batch_size     = "1MiB"
+    remote_timeout = "10s"
+  }
+}

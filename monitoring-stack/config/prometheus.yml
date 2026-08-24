@@ -1,0 +1,156 @@
+global:
+  scrape_interval: 15s
+  scrape_timeout: 10s
+  evaluation_interval: 15s
+  external_labels:
+    monitor: homelab
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+  - job_name: node-dockerhost
+    static_configs:
+      - targets: ["192.168.0.212:9100"]
+        labels: {host: dockerhost, ip: "192.168.0.212"}
+  - job_name: cadvisor
+    static_configs:
+      - targets: ["cadvisor:8080"]
+        labels: {host: dockerhost, ip: "192.168.0.212"}
+  - job_name: node-router
+    static_configs:
+      - targets: ["192.168.0.1:9100"]
+        labels: {host: router, ip: "192.168.0.1"}
+    metric_relabel_configs:
+      - source_labels: [__name__]
+        regex: node_nat_traffic
+        action: drop
+  - job_name: crowdsec
+    static_configs:
+      - targets: ["192.168.0.1:6060"]
+        labels: {host: router, service: crowdsec}
+  - job_name: sonarr
+    static_configs:
+      - targets: ["exportarr-sonarr:9707"]
+        labels: {host: homeserver, app: sonarr}
+  - job_name: radarr
+    static_configs:
+      - targets: ["exportarr-radarr:9708"]
+        labels: {host: homeserver, app: radarr}
+  - job_name: prowlarr
+    static_configs:
+      - targets: ["exportarr-prowlarr:9709"]
+        labels: {host: homeserver, app: prowlarr}
+  - job_name: bazarr
+    static_configs:
+      - targets: ["exportarr-bazarr:9710"]
+        labels: {host: homeserver, app: bazarr}
+  - job_name: hass
+    scrape_interval: 60s
+    metrics_path: /api/prometheus
+    authorization:
+      type: Bearer
+      credentials_file: /etc/prometheus/ha_token
+    static_configs:
+      - targets: ["192.168.0.211:8123"]
+        labels: {host: homeassistant, ip: "192.168.0.211"}
+  - job_name: adguard
+    static_configs:
+      - targets: ["adguard-exporter:9617"]
+        labels: {host: router, service: adguard}
+  - job_name: node-homeserver
+    static_configs:
+      - targets: ["192.168.0.69:9182"]
+        labels: {host: homeserver, ip: "192.168.0.69"}
+    metric_relabel_configs:
+      - source_labels: [__name__]
+        regex: windows_service_.*
+        action: drop
+  - job_name: cake
+    scrape_interval: 10s
+    metrics_path: /cgi-bin/cake
+    static_configs:
+      - targets: ["192.168.0.1:80"]
+        labels: {host: router, service: qosmate}
+  - job_name: blackbox-icmp
+    scrape_interval: 10s
+    metrics_path: /probe
+    params:
+      module: [icmp]
+    static_configs:
+      - targets: ['1.1.1.1', '8.8.8.8', '9.9.9.9']
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter:9115
+  - job_name: kube-state-metrics-ci-k3s-01
+    scrape_interval: 30s
+    scrape_timeout: 10s
+    scheme: https
+    metrics_path: /api/v1/namespaces/monitoring/services/http:kube-state-metrics:8080/proxy/metrics
+    authorization:
+      type: Bearer
+      credentials_file: /etc/prometheus/k3s/ci-k3s-01.token
+    tls_config:
+      ca_file: /etc/prometheus/k3s/ci-k3s-01-ca.crt
+      insecure_skip_verify: false
+    static_configs:
+      - targets: ["192.168.0.66:6443"]
+        labels: {cluster: ci-k3s-01, host: ci-k3s-01, ip: "192.168.0.66"}
+  - job_name: kubelet-cadvisor-ci-k3s-01
+    scrape_interval: 15s
+    scrape_timeout: 10s
+    scheme: https
+    metrics_path: /api/v1/nodes/ci-k3s-01/proxy/metrics/cadvisor
+    authorization:
+      type: Bearer
+      credentials_file: /etc/prometheus/k3s/ci-k3s-01.token
+    tls_config:
+      ca_file: /etc/prometheus/k3s/ci-k3s-01-ca.crt
+      insecure_skip_verify: false
+    static_configs:
+      - targets: ["192.168.0.66:6443"]
+        labels: {cluster: ci-k3s-01, host: ci-k3s-01, ip: "192.168.0.66"}
+    metric_relabel_configs:
+      - source_labels: [__name__]
+        regex: 'container_(cpu_usage_seconds_total|memory_working_set_bytes)'
+        action: keep
+  - job_name: arc-listener-ci-k3s-01
+    scrape_interval: 30s
+    scrape_timeout: 10s
+    scheme: https
+    metrics_path: /api/v1/namespaces/arc-systems/services/http:arc-listener-metrics:metrics/proxy/metrics
+    authorization:
+      type: Bearer
+      credentials_file: /etc/prometheus/k3s/ci-k3s-01.token
+    tls_config:
+      ca_file: /etc/prometheus/k3s/ci-k3s-01-ca.crt
+      insecure_skip_verify: false
+    static_configs:
+      - targets: ["192.168.0.66:6443"]
+        labels: {cluster: ci-k3s-01, host: ci-k3s-01, ip: "192.168.0.66", service: arc-listener}
+    metric_relabel_configs:
+      - source_labels: [__name__]
+        regex: 'gha_(assigned_jobs|busy_runners|idle_runners|running_jobs)'
+        action: keep
+  - job_name: node-ci-k3s-01
+    static_configs:
+      - targets: ["192.168.0.66:9100"]
+        labels: {host: ci-k3s-01, ip: "192.168.0.66"}
+  - job_name: loki
+    static_configs:
+      - targets: ['loki:3100']
+        labels:
+          host: docker-host
+          ip: 192.168.0.212
+          service: loki
+
+  - job_name: alloy
+    static_configs:
+      - targets: ['alloy:12345']
+        labels:
+          host: docker-host
+          ip: 192.168.0.212
+          service: alloy
