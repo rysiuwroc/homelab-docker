@@ -1,3 +1,5 @@
+# Source of truth: homelab-docker/monitoring-stack/config/prometheus.yml.
+# Do not edit on the host — edit in git and run monitoring-stack/apply-config.sh.
 global:
   scrape_interval: 15s
   scrape_timeout: 10s

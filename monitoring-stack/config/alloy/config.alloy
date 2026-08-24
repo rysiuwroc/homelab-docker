@@ -1,3 +1,5 @@
+// Source of truth: homelab-docker/monitoring-stack/config/alloy/config.alloy.
+// Do not edit on the host — edit in git and run monitoring-stack/apply-config.sh.
 // Grafana Alloy v1.18.1 — kolektor logów hosta docker (.212)
 
 // ---- Kontenery Docker ----------------------------------------
