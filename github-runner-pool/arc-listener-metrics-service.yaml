@@ -1,0 +1,49 @@
+# Service + RBAC that let Prometheus on 192.168.0.212 scrape the ARC scale-set
+# listener metrics (gha_assigned_jobs, gha_running_jobs, gha_busy_runners,
+# gha_idle_runners) through the authenticated Kubernetes apiserver service
+# proxy. The listener itself is created by the gha-runner-scale-set Helm
+# release; these three objects are not part of any chart.
+apiVersion: v1
+kind: Service
+metadata:
+  name: arc-listener-metrics
+  namespace: arc-systems
+  labels:
+    app.kubernetes.io/name: arc-listener-metrics
+    app.kubernetes.io/part-of: gha-runner-scale-set
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/component: runner-scale-set-listener
+    app.kubernetes.io/part-of: gha-runner-scale-set
+    actions.github.com/scale-set-name: linux-docker-ci
+  ports:
+    - name: metrics
+      port: 8080
+      targetPort: metrics
+      protocol: TCP
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: prometheus-external-scrape
+  namespace: arc-systems
+rules:
+  - apiGroups: [""]
+    resources: [services, services/proxy]
+    resourceNames: [arc-listener-metrics, "http:arc-listener-metrics:metrics"]
+    verbs: [get]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: prometheus-external-scrape
+  namespace: arc-systems
+subjects:
+  - kind: ServiceAccount
+    name: prometheus-external-scrape
+    namespace: monitoring
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: prometheus-external-scrape

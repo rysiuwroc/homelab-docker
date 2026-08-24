@@ -176,6 +176,30 @@ sudo k3s kubectl -n monitoring get configmap kube-state-metrics-customresourcest
 
 Prometheus does not reach this endpoint directly. The Service stays `ClusterIP` and is scraped from the monitoring host `192.168.0.212` through the Kubernetes apiserver service proxy, authenticated as the `monitoring/prometheus-external-scrape` ServiceAccount created by `extraManifests` in this value file (it also grants that account `nodes/proxy` on `ci-k3s-01` for cAdvisor). The account's long-lived token lives only in the Secret `monitoring/prometheus-external-scrape-token` and in the Prometheus configuration on the monitoring host; it is host-side state and is never committed here. Re-uploading these values does not rotate the token, so scraping keeps working across `helm upgrade`.
 
+## Job-queue metrics
+
+`arc-listener-metrics-service.yaml` is a byte-accurate record of a Service and a Role/RoleBinding that were hand-created on `ci-k3s-01` on 2026-07-26 and were previously untracked. The listener Pod itself is not created by this file — it comes from the `gha-runner-scale-set` Helm release (`arc-runner-values.yaml`, applied above); these three objects are chart-less and exist only to expose and gate access to metrics that release already produces.
+
+The chain, in order: `listenerMetrics` gauges in `arc-runner-values.yaml` turn on the listener's metrics endpoint, which the controller serves via `--listener-metrics-addr=:8080 --listener-metrics-endpoint=/metrics` (set from `metrics.listenerAddr` / `metrics.listenerEndpoint` in `arc-controller-metrics-values.yaml`) on a container port named `metrics`; this `ClusterIP` Service selects that port on the `linux-docker-ci` listener only; the Role/RoleBinding grant `services` and `services/proxy` `get` on it to ServiceAccount `monitoring/prometheus-external-scrape`; and Prometheus job `arc-listener-ci-k3s-01` in `monitoring-stack/config/prometheus.yml` scrapes it through `metrics_path: /api/v1/namespaces/arc-systems/services/http:arc-listener-metrics:metrics/proxy/metrics`, keeping only `gha_(assigned_jobs|busy_runners|idle_runners|running_jobs)`.
+
+The metrics are not exposed outside the cluster: the Service stays `ClusterIP`, there is no NodePort, Ingress, or ServiceMonitor, and the only access path is the authenticated apiserver service proxy using the ServiceAccount bearer token. That token lives host-side only, at `/etc/prometheus/k3s/ci-k3s-01.token` on `192.168.0.212`, and is never committed here.
+
+Two prerequisites must exist first, and neither failure is loud:
+
+- ServiceAccount `monitoring/prometheus-external-scrape` is **not** created by this file — it comes from `extraManifests` in `kube-state-metrics-values.yaml`. Apply that release first; otherwise this RoleBinding binds a non-existent subject (Kubernetes accepts it silently) and every scrape returns `403`.
+- The scale set must be installed and named `linux-docker-ci`; the selector pins `actions.github.com/scale-set-name`, so a renamed scale set leaves the Service with zero endpoints while the Prometheus target still reports `up` but empty.
+
+Apply and verify:
+
+```bash
+sudo k3s kubectl apply -f github-runner-pool/arc-listener-metrics-service.yaml
+sudo k3s kubectl -n arc-systems get endpoints arc-listener-metrics -o wide
+sudo k3s kubectl -n arc-systems get pod -l app.kubernetes.io/component=runner-scale-set-listener \
+  -o jsonpath='{.items[*].spec.containers[*].ports}{"\n"}'
+```
+
+`get endpoints` must print exactly one address on port `8080`, and the container port name must be `metrics`, since the Service targets the port by name, not by number. `kubectl apply --dry-run=server` reports all three objects `unchanged` when the cluster matches this file — unlike `arc-priority-classes.yaml` above, whose documented `configured` artifact does not apply here.
+
 ## ARC runner image prewarm
 
 `arc-runner-values.yaml` prewarms the exact `.NET API tests` job-container and service-container image references — `registry-mcr-images.arc-runners.svc.cluster.local:5000/dotnet/sdk:10.0` and `postgres:17-alpine` — in parallel in each new runner's private DinD store before that runner registers. Its DinD graph uses a per-runner node-backed `emptyDir` mounted at `/var/lib/docker`, avoiding nested writable-layer copy-on-write while retaining ephemeral runner isolation. The prewarm is best-effort: a registry failure is logged but never prevents runner registration; GitHub Actions will then pull the image in the job as usual.
