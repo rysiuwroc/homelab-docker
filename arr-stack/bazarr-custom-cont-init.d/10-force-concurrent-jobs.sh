@@ -17,12 +17,8 @@
 # live in-memory config, not just the file.
 CONFIG=/config/config/config.yaml
 
-if [ -f "$CONFIG" ]; then
-  if grep -q '^  concurrent_jobs:' "$CONFIG"; then
-    sed -i 's/^  concurrent_jobs:.*/  concurrent_jobs: 1/' "$CONFIG"
-  else
-    sed -i '/^general:/a\  concurrent_jobs: 1' "$CONFIG"
-  fi
+if [ -f "$CONFIG" ] && grep -q '^  concurrent_jobs:' "$CONFIG"; then
+  sed -i 's/^  concurrent_jobs:.*/  concurrent_jobs: 1/' "$CONFIG"
   echo "[bazarr-init] concurrent_jobs pinned to 1 in config.yaml"
 fi
 
