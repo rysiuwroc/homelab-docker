@@ -77,20 +77,17 @@ services:
       retries: 3
       start_period: 60s
 
-  # bazarr: subtitle sync/search runs on the shared RAID0 media disk (F:\Plex on HomeServer .69, mounted
-  #   here over CIFS). Bazarr has no env var for this - after ANY fresh volume/deploy, open the UI
-  #   (Settings > General) or set via API and confirm `general.concurrent_jobs == 1`:
-  #     curl -s http://192.168.0.212:6767/api/system/settings -H "X-API-KEY: <bazarr apikey>" \
-  #       | jq .general.concurrent_jobs
-  #   Left at the LSIO default (4), Bazarr can run multiple ffsubsync/search jobs in parallel, each
-  #   reading large chunks of video files over CIFS - this saturated the RAID0 (queue depth 20+,
-  #   180-320ms read latency) and made Plex/Jellyfin playback stall (2026-08-25 incident).
+  # bazarr: concurrent_jobs is force-set to 1 on every start by
+  # bazarr-custom-cont-init.d/10-force-concurrent-jobs.sh - see that script for why
+  # (2026-08-25 RAID0 saturation incident: LSIO default of 4 let multiple ffsubsync/search
+  # jobs hit the shared CIFS media disk in parallel and stalled Plex/Jellyfin playback).
   bazarr:
     <<: *arr-common
     image: lscr.io/linuxserver/bazarr:latest
     container_name: bazarr
     volumes:
       - bazarr_config:/config
+      - ./bazarr-custom-cont-init.d:/custom-cont-init.d:ro
       - /mnt/cifs/media-f:/data
       - /mnt/cifs/media-e:/archive
     ports:

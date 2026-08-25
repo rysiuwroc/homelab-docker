@@ -6,3 +6,7 @@ monitoring-stack/config/** -text
 # git-bash/Linux checkout — CRLF would break the shebang, so pin LF regardless
 # of core.autocrlf.
 monitoring-stack/apply-config.sh text eol=lf
+
+# bazarr-custom-cont-init.d scripts are bind-mounted straight into the LSIO container and
+# run as #!/usr/bin/with-contenv bash - same CRLF-breaks-the-shebang risk as apply-config.sh.
+arr-stack/bazarr-custom-cont-init.d/*.sh text eol=lf
