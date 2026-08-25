@@ -6,8 +6,15 @@
 # and stalled Plex/Jellyfin playback (2026-08-25 incident).
 #
 # LSIO runs every /custom-cont-init.d/*.sh on EVERY container start (not just first boot), so
-# this self-heals after a config reset/upgrade instead of relying on someone remembering to
-# reapply the setting by hand.
+# the file patch below self-heals a *restart* after some other process reset config.yaml.
+#
+# On a genuinely fresh volume (first-ever boot) config.yaml does not exist yet when this
+# script runs, so there is nothing to patch here - and even if we raced to create it,
+# Bazarr reads settings into memory once at startup, so a file edit made after that point
+# would not affect the already-running process. A background watcher below instead enforces
+# the setting through Bazarr's own /api/system/settings endpoint (the same code path the
+# Settings UI's Save button uses) once the app is actually listening, which updates the
+# live in-memory config, not just the file.
 CONFIG=/config/config/config.yaml
 
 if [ -f "$CONFIG" ]; then
@@ -16,9 +23,34 @@ if [ -f "$CONFIG" ]; then
   else
     sed -i '/^general:/a\  concurrent_jobs: 1' "$CONFIG"
   fi
-  echo "[bazarr-init] concurrent_jobs pinned to 1"
-else
-  # First-ever boot: Bazarr hasn't generated config.yaml yet, so there's nothing to patch here.
-  # It will self-correct on the next container start (this script reruns every time).
-  echo "[bazarr-init] config.yaml not present yet (first boot) - will patch on next restart"
+  echo "[bazarr-init] concurrent_jobs pinned to 1 in config.yaml"
 fi
+
+(
+  attempt=0
+  while [ "$attempt" -lt 120 ]; do
+    attempt=$((attempt + 1))
+    sleep 1
+
+    [ -f "$CONFIG" ] || continue
+
+    apikey=$(awk '
+      /^auth:/ { in_auth=1; next }
+      /^[^ ]/  { in_auth=0 }
+      in_auth && /^  apikey:/ { print $2; exit }
+    ' "$CONFIG")
+    [ -n "$apikey" ] || continue
+
+    code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 \
+      -X POST "http://127.0.0.1:6767/api/system/settings" \
+      -H "X-API-KEY: ${apikey}" \
+      -d "settings-general-concurrent_jobs=1")
+
+    if [ "$code" = "204" ]; then
+      echo "[bazarr-init] concurrent_jobs enforced via API (attempt ${attempt})"
+      exit 0
+    fi
+  done
+  echo "[bazarr-init] WARNING: gave up enforcing concurrent_jobs via API after ${attempt}s"
+) &
+disown
