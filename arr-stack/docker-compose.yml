@@ -77,12 +77,17 @@ services:
       retries: 3
       start_period: 60s
 
+  # bazarr: concurrent_jobs is force-set to 1 on every start by
+  # bazarr-custom-cont-init.d/10-force-concurrent-jobs.sh - see that script for why
+  # (2026-08-25 RAID0 saturation incident: LSIO default of 4 let multiple ffsubsync/search
+  # jobs hit the shared CIFS media disk in parallel and stalled Plex/Jellyfin playback).
   bazarr:
     <<: *arr-common
     image: lscr.io/linuxserver/bazarr:latest
     container_name: bazarr
     volumes:
       - bazarr_config:/config
+      - ./bazarr-custom-cont-init.d:/custom-cont-init.d:ro
       - /mnt/cifs/media-f:/data
       - /mnt/cifs/media-e:/archive
     ports:
