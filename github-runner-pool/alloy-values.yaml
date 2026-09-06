@@ -104,7 +104,7 @@ alloy:
           host = "ci-k3s-01",
         }
         endpoint {
-          url = "http://192.168.0.212:3100/loki/api/v1/push"
+          url = "http://192.168.0.30:3100/loki/api/v1/push"
         }
       }
   mounts:

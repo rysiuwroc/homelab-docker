@@ -1,4 +1,4 @@
-# Service + RBAC that let Prometheus on 192.168.0.212 scrape the ARC scale-set
+# Service + RBAC that let Prometheus on 192.168.0.30 (mon-01) scrape the ARC scale-set
 # listener metrics (gha_assigned_jobs, gha_running_jobs, gha_busy_runners,
 # gha_idle_runners) through the authenticated Kubernetes apiserver service
 # proxy. The listener itself is created by the gha-runner-scale-set Helm
