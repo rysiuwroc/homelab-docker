@@ -171,7 +171,8 @@ loki.write "local" {
   }
 
   endpoint {
-    url            = "http://loki:3100/loki/api/v1/push"
+    // Loki przeniesiony na mon-01 (.30); alloy zostaje na .212 jako agent hosta.
+    url            = "http://192.168.0.30:3100/loki/api/v1/push"
     batch_wait     = "2s"
     batch_size     = "1MiB"
     remote_timeout = "10s"
