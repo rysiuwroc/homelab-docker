@@ -167,3 +167,13 @@ scrape_configs:
           host: docker-host
           ip: 192.168.0.212
           service: alloy
+
+  - job_name: node-pve
+    static_configs:
+      # Hipernadzorca .28 - hostuje mon-01 i ci-k3s-01, wiec musi byc mierzony
+      # niezaleznie od nich (jego awaria gasi tez wlasny monitoring).
+      - targets: ['192.168.0.28:9100']
+        labels:
+          host: pve
+          ip: 192.168.0.28
+          service: proxmox
