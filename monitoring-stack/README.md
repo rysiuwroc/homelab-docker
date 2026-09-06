@@ -1,7 +1,26 @@
 # monitoring-stack (agenty hosta, `192.168.0.212`)
 
-Agenty, ktore MUSZA stac na mierzonym hoscie. Deployowane przez Portainer stack `18`
-prosto z `main` (AutoUpdate co 5 minut, wiec merge do `main` *jest* redeployem).
+Agenty, ktore MUSZA stac na mierzonym hoscie.
+
+## UWAGA: ten katalog nie jest dzis deployowany przez Portainera
+
+Zmierzone 2026-09-06 w `portainer.db`: stack `18` ("monitoring") ma
+**`AutoUpdate: null` i `GitConfig: null`** - nie jest powiazany z gitem, w
+przeciwieznosci do stackow `16` (arr) i `17` (jellyseerr), ktore maja
+`Interval: 5m`. Poprzednia wersja tego README twierdzila, ze merge do `main`
+*jest* redeployem - **to nieprawda dla tego stacka**.
+
+Co wiecej, zywe kontenery byly wdrozone z
+`/data/compose/18/7d1c3f6b4473.../monitoring-stack/docker-compose.yml`, a tego
+katalogu **juz nie ma**. Najnowszy materializowany checkout (`v54`) ma pliki
+0-bajtowe. Kliknietie "Update the stack" w Portainerze wdrozylo by wiec pusty
+albo niekompletny compose.
+
+Dopoki to nie zostanie naprawione, agenty deployuje sie z hosta:
+
+```sh
+cd /home/rysiu/stacks/monitoring-agents && docker compose up -d --remove-orphans
+```
 
 Centrala monitoringu (Prometheus, Grafana, Loki, exportery) zostala przeniesiona na
 `mon-01` (`192.168.0.30`, VM na Proxmoksie `.28`) - patrz [`../monitoring-central/`](../monitoring-central/).
