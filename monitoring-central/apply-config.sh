@@ -11,10 +11,10 @@
 # Override the target with MONITORING_HOST=user@host.
 set -eu
 
-HOST="${MONITORING_HOST:-rysiu@192.168.0.212}"
+HOST="${MONITORING_HOST:-rysiu@192.168.0.30}"
 DEST=/home/rysiu/monitoring
 CFG="$(CDPATH= cd -- "$(dirname -- "$0")/config" && pwd)"
-FILES="alloy/config.alloy"
+FILES="prometheus.yml blackbox.yml loki-config.yaml grafana/provisioning/datasources/prometheus.yml grafana/provisioning/datasources/loki.yml"
 
 MODE=apply
 [ "${1:-}" = "--check" ] && MODE=check
@@ -55,9 +55,6 @@ for f in $changed; do
     loki-config.yaml)
       scp -q loki-config.yaml "$HOST:/tmp/cand-loki.yaml"
       ssh "$HOST" 'docker cp /tmp/cand-loki.yaml loki:/tmp/cand.yaml && docker exec loki loki -verify-config -config.file=/tmp/cand.yaml' ;;
-    alloy/config.alloy)
-      scp -q alloy/config.alloy "$HOST:/tmp/cand.alloy"
-      ssh "$HOST" 'docker cp /tmp/cand.alloy alloy:/tmp/cand.alloy && docker exec alloy alloy fmt /tmp/cand.alloy >/dev/null' ;;
   esac
 done
 
@@ -69,7 +66,6 @@ for f in $changed; do
     prometheus.yml)     ssh "$HOST" 'curl -fsS -X POST localhost:9090/-/reload' ;;
     blackbox.yml)       ssh "$HOST" 'docker kill -s HUP blackbox-exporter' ;;
     loki-config.yaml)   ssh "$HOST" 'docker restart loki' ;;
-    alloy/config.alloy) ssh "$HOST" 'curl -fsS -X POST localhost:12345/-/reload' ;;
     grafana/*)          grafana=1 ;;
   esac
 done

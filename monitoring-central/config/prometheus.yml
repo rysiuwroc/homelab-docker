@@ -16,8 +16,18 @@ scrape_configs:
         labels: {host: dockerhost, ip: "192.168.0.212"}
   - job_name: cadvisor
     static_configs:
-      - targets: ["cadvisor:8080"]
+      # Scrape przez LAN: cadvisor zostal na .212 (mierzy tamtejszego dockera),
+      # a Prometheus stoi teraz na mon-01, wiec DNS compose'a juz nie dziala.
+      - targets: ["192.168.0.212:8080"]
         labels: {host: dockerhost, ip: "192.168.0.212"}
+  - job_name: node-mon01
+    static_configs:
+      - targets: ["192.168.0.30:9100"]
+        labels: {host: mon-01, ip: "192.168.0.30"}
+  - job_name: cadvisor-mon01
+    static_configs:
+      - targets: ["cadvisor:8080"]
+        labels: {host: mon-01, ip: "192.168.0.30"}
   - job_name: node-router
     static_configs:
       - targets: ["192.168.0.1:9100"]
@@ -145,13 +155,14 @@ scrape_configs:
     static_configs:
       - targets: ['loki:3100']
         labels:
-          host: docker-host
-          ip: 192.168.0.212
+          host: mon-01
+          ip: 192.168.0.30
           service: loki
 
   - job_name: alloy
     static_configs:
-      - targets: ['alloy:12345']
+      # Alloy zostal na .212 - zbiera logi dockera, journal i syslog z routera.
+      - targets: ['192.168.0.212:12345']
         labels:
           host: docker-host
           ip: 192.168.0.212
