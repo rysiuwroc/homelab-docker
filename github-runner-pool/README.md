@@ -136,6 +136,15 @@ sudo k3s kubectl get pods -n arc-runners -l app=nexus-package-cache
 
 The admin password remains only in the Kubernetes Secret and is used when future package proxy repositories need provisioning. Do not delete `nexus-data` except when intentionally discarding the package cache; doing so removes all cached packages and triggers the bootstrap again.
 
+The bootstrap is idempotent and repairs drift: it accepts the EULA once, recreates a missing/offline `nuget-proxy` repository, binds anonymous access to a restricted `ci-nuget-anonymous` user (PUT-first so reruns never conflict), and fast-paths to Ready when the repository already serves with no admin traffic. If a transient DNS outage at nexus start pins the proxy in a failed state (nexus log: `Proxy URL blocked: Failed to resolve host: api.nuget.org`), the failed repository survives the bootstrap's own restarts — the fix is to restart the deployment once DNS is healthy again:
+
+```bash
+sudo k3s kubectl -n arc-runners rollout restart deployment/nexus-package-cache
+sudo k3s kubectl -n arc-runners rollout status deployment/nexus-package-cache --timeout=420s
+```
+
+The repository validates against its remote URL at every nexus start, so the restart restores it and the bootstrap fast-path completes.
+
 ## CI scheduling priority
 
 `arc-priority-classes.yaml` defines the three cluster-scoped PriorityClasses every ARC workload in this directory references: `ci-control-plane` (900000000) for the ARC controller and the scale-set listener, `ci-monitoring` (800000000) for cluster telemetry, and `ci-runners` (-100000, `preemptionPolicy: Never`) so ephemeral runners are the first workloads displaced under node memory pressure. Apply it **before** the `gha-runner-scale-set` `helm upgrade` below and **before** installing kube-state-metrics; a missing class leaves those pods `Pending` with `FailedScheduling: no PriorityClass with name ... found`.

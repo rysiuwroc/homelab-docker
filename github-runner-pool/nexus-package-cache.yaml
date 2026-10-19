@@ -68,35 +68,71 @@ spec:
           args:
             - |
               umask 077
-              package_url=http://127.0.0.1:8081/repository/nuget-proxy/v3/content/0/microsoft.net.test.sdk/17.14.1/microsoft.net.test.sdk.17.14.1.nupkg
+              base=http://127.0.0.1:8081
+              package_url=$base/repository/nuget-proxy/v3/content/0/microsoft.net.test.sdk/17.14.1/microsoft.net.test.sdk.17.14.1.nupkg
+              index_url=$base/repository/nuget-proxy/index.json
+              secret_password=$(cat /opt/nexus-bootstrap-secrets/admin-password)
+              auth=$(mktemp)
+              payload=$(mktemp)
+              anonymous_password=$(mktemp)
+              ready() {
+                rm -f "$auth" "$payload" "$anonymous_password"
+                unset admin_password secret_password
+                touch /tmp/bootstrap-ready
+                exec tail -f /dev/null
+              }
+              trap 'rm -f "$auth" "$payload" "$anonymous_password"' EXIT
               for attempt in $(seq 1 120); do
-                if curl -fsS -o /dev/null http://127.0.0.1:8081/service/rest/v1/status/writable; then
+                if curl -fsS -o /dev/null "$base/service/rest/v1/status/writable"; then
                   break
                 fi
                 sleep 5
               done
-              curl -fsS -o /dev/null http://127.0.0.1:8081/service/rest/v1/status/writable
-              if ! test -s /nexus-data/admin.password && curl -fsS -o /dev/null "$package_url"; then
-                touch /tmp/bootstrap-ready
-                exec tail -f /dev/null
+              curl -fsS -o /dev/null "$base/service/rest/v1/status/writable"
+              # Already provisioned and serving: nothing to do, no admin traffic.
+              if ! test -s /nexus-data/admin.password && curl -fsS -o /dev/null "$index_url" && curl -fsS -o /dev/null "$package_url"; then
+                ready
               fi
+              # Initial first-boot password when present, else the provisioned secret.
               if test -s /nexus-data/admin.password; then
                 initial_password=true
                 admin_password=$(cat /nexus-data/admin.password)
               else
                 initial_password=false
-                admin_password=$(cat /opt/nexus-bootstrap-secrets/admin-password)
+                admin_password=$secret_password
               fi
-              auth=$(mktemp)
-              payload=$(mktemp)
-              anonymous_password=$(mktemp)
-              trap 'rm -f "$auth" "$payload" "$anonymous_password"' EXIT
               printf 'user = admin:%s\n' "$admin_password" >"$auth"
-              curl --config "$auth" -fsS -o "$payload" http://127.0.0.1:8081/service/rest/v1/system/eula
-              sed -i 's/"accepted"[[:space:]]*:[[:space:]]*false/"accepted":true/' "$payload"
-              code=$(curl --config "$auth" -sS -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' --data @"$payload" http://127.0.0.1:8081/service/rest/v1/system/eula)
-              test "$code" = 204
-              cat >"$payload" <<'JSON'
+              # A stale admin.password (already rotated) falls back to the secret.
+              code=$(curl --config "$auth" -sS -o /dev/null -w '%{http_code}' "$base/service/rest/v1/system/eula")
+              if test "$code" != 200; then
+                printf 'user = admin:%s\n' "$secret_password" >"$auth"
+                initial_password=false
+                code=$(curl --config "$auth" -sS -o /dev/null -w '%{http_code}' "$base/service/rest/v1/system/eula")
+                if test "$code" != 200; then
+                  echo "admin authentication failed (HTTP $code); retrying on next pod cycle"
+                  exit 1
+                fi
+              fi
+              # Accept the EULA once, idempotently.
+              curl --config "$auth" -fsS -o "$payload" "$base/service/rest/v1/system/eula"
+              if ! grep -q '"accepted"[[:space:]]*:[[:space:]]*true' "$payload"; then
+                sed -i 's/"accepted"[[:space:]]*:[[:space:]]*false/"accepted":true/' "$payload"
+                code=$(curl --config "$auth" -sS -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' --data @"$payload" "$base/service/rest/v1/system/eula")
+                if test "$code" != 204 && test "$code" != 200 && test "$code" != 400; then
+                  echo "EULA accept failed (HTTP $code)"
+                  exit 1
+                fi
+              fi
+              # Ensure the nuget-proxy repository exists and serves. DELETE 404 means
+              # the repo is pinned failed (e.g. transient DNS failure at nexus start)
+              # and only a nexus restart restores it -- exit and let the pod cycle retry.
+              ensure_repo() {
+                code=$(curl --config "$auth" -sS -o /dev/null -w '%{http_code}' -X DELETE "$base/service/rest/v1/repositories/nuget-proxy")
+                if test "$code" != 204 && test "$code" != 404; then
+                  echo "delete nuget-proxy failed (HTTP $code)"
+                  return 1
+                fi
+                cat >"$payload" <<'JSON'
               {
                 "name": "nuget-proxy",
                 "online": true,
@@ -107,31 +143,82 @@ spec:
                 "nugetProxy": {"queryCacheItemMaxAge": 3600, "nugetVersion": "V3"}
               }
               JSON
-              code=$(curl --config "$auth" -sS -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' --data @"$payload" http://127.0.0.1:8081/service/rest/v1/repositories/nuget/proxy)
-              test "$code" = 201 || test "$code" = 400
-              printf '{"id":"ci-nuget-proxy-read","name":"ci-nuget-proxy-read","description":"Anonymous read access limited to the NuGet proxy","privileges":["nx-repository-view-nuget-nuget-proxy-browse","nx-repository-view-nuget-nuget-proxy-read"],"roles":[]}' >"$payload"
-              code=$(curl --config "$auth" -sS -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' --data @"$payload" http://127.0.0.1:8081/service/rest/v1/security/roles)
-              test "$code" = 200 || test "$code" = 400
-              openssl rand -base64 36 >"$anonymous_password"
-              printf '{"userId":"ci-nuget-anonymous","firstName":"CI","lastName":"Anonymous","emailAddress":"ci-nuget-anonymous@example.invalid","password":"%s","status":"active","roles":["ci-nuget-proxy-read"]}' "$(tr -d '\n' <"$anonymous_password")" >"$payload"
-              code=$(curl --config "$auth" -sS -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' --data @"$payload" http://127.0.0.1:8081/service/rest/v1/security/users)
-              test "$code" = 200 || test "$code" = 201 || test "$code" = 400
-              printf '{"userId":"ci-nuget-anonymous","firstName":"CI","lastName":"Anonymous","emailAddress":"ci-nuget-anonymous@example.invalid","source":"default","status":"active","roles":["ci-nuget-proxy-read"]}' >"$payload"
-              code=$(curl --config "$auth" -sS -o /dev/null -w '%{http_code}' -X PUT -H 'Content-Type: application/json' --data @"$payload" http://127.0.0.1:8081/service/rest/v1/security/users/ci-nuget-anonymous)
-              test "$code" = 204
-              printf '{"enabled":true,"userId":"ci-nuget-anonymous","realmName":"NexusAuthorizingRealm"}' >"$payload"
-              code=$(curl --config "$auth" -sS -o /dev/null -w '%{http_code}' -X PUT -H 'Content-Type: application/json' --data @"$payload" http://127.0.0.1:8081/service/rest/v1/security/anonymous)
-              test "$code" = 200
-              curl -fsS -o /dev/null "$package_url"
-              if "$initial_password"; then
-                code=$(curl --config "$auth" -sS -o /dev/null -w '%{http_code}' -X PUT -H 'Content-Type: text/plain' --data-binary @/opt/nexus-bootstrap-secrets/admin-password http://127.0.0.1:8081/service/rest/v1/security/users/admin/change-password)
-                test "$code" = 204
-                test ! -e /nexus-data/admin.password
+                code=$(curl --config "$auth" -sS -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' --data @"$payload" "$base/service/rest/v1/repositories/nuget/proxy")
+                if test "$code" != 201 && test "$code" != 400; then
+                  echo "create nuget-proxy failed (HTTP $code)"
+                  return 1
+                fi
+                attempts=0
+                while test "$attempts" -lt 30; do
+                  if curl --config "$auth" -fsS -o /dev/null "$index_url" && curl --config "$auth" -fsS -o /dev/null "$package_url"; then
+                    return 0
+                  fi
+                  sleep 2
+                  attempts=$((attempts + 1))
+                done
+                echo "nuget-proxy not serving after recreation"
+                return 1
+              }
+              if ! curl --config "$auth" -fsS -o /dev/null "$index_url" || ! curl --config "$auth" -fsS -o /dev/null "$package_url"; then
+                ensure_repo || exit 1
               fi
-              unset admin_password
-              rm -f "$auth" "$payload" "$anonymous_password"
-              touch /tmp/bootstrap-ready
-              exec tail -f /dev/null
+              # Role (idempotent; 400 = already present).
+              printf '{"id":"ci-nuget-proxy-read","name":"ci-nuget-proxy-read","description":"Anonymous read access limited to the NuGet proxy","privileges":["nx-repository-view-nuget-nuget-proxy-browse","nx-repository-view-nuget-nuget-proxy-read"],"roles":[]}' >"$payload"
+              code=$(curl --config "$auth" -sS -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' --data @"$payload" "$base/service/rest/v1/security/roles")
+              if test "$code" != 200 && test "$code" != 400; then
+                echo "role create failed (HTTP $code)"
+                exit 1
+              fi
+              # Anonymous user: PUT-first so reruns can never 500 on a duplicate.
+              printf '{"userId":"ci-nuget-anonymous","firstName":"CI","lastName":"Anonymous","emailAddress":"ci-nuget-anonymous@example.invalid","source":"default","status":"active","roles":["ci-nuget-proxy-read"]}' >"$payload"
+              code=$(curl --config "$auth" -sS -o /dev/null -w '%{http_code}' -X PUT -H 'Content-Type: application/json' --data @"$payload" "$base/service/rest/v1/security/users/ci-nuget-anonymous")
+              if test "$code" = 404; then
+                openssl rand -base64 36 >"$anonymous_password"
+                printf '{"userId":"ci-nuget-anonymous","firstName":"CI","lastName":"Anonymous","emailAddress":"ci-nuget-anonymous@example.invalid","password":"%s","status":"active","roles":["ci-nuget-proxy-read"]}' "$(tr -d '\n' <"$anonymous_password")" >"$payload"
+                code=$(curl --config "$auth" -sS -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' --data @"$payload" "$base/service/rest/v1/security/users")
+                if test "$code" != 201 && test "$code" != 200 && test "$code" != 400; then
+                  echo "create ci-nuget-anonymous failed (HTTP $code)"
+                  exit 1
+                fi
+                printf '{"userId":"ci-nuget-anonymous","firstName":"CI","lastName":"Anonymous","emailAddress":"ci-nuget-anonymous@example.invalid","source":"default","status":"active","roles":["ci-nuget-proxy-read"]}' >"$payload"
+                code=$(curl --config "$auth" -sS -o /dev/null -w '%{http_code}' -X PUT -H 'Content-Type: application/json' --data @"$payload" "$base/service/rest/v1/security/users/ci-nuget-anonymous")
+                if test "$code" != 204; then
+                  echo "update ci-nuget-anonymous failed (HTTP $code)"
+                  exit 1
+                fi
+              fi
+              # Anonymous access bound to the restricted user (idempotent).
+              printf '{"enabled":true,"userId":"ci-nuget-anonymous","realmName":"NexusAuthorizingRealm"}' >"$payload"
+              code=$(curl --config "$auth" -sS -o /dev/null -w '%{http_code}' -X PUT -H 'Content-Type: application/json' --data @"$payload" "$base/service/rest/v1/security/anonymous")
+              if test "$code" != 200; then
+                echo "anonymous binding failed (HTTP $code)"
+                exit 1
+              fi
+              # Final anonymous verification; a cold proxy fetch can take seconds.
+              attempts=0
+              while test "$attempts" -lt 12; do
+                if curl -fsS -o /dev/null "$index_url" && curl -fsS -o /dev/null "$package_url"; then
+                  break
+                fi
+                sleep 5
+                attempts=$((attempts + 1))
+              done
+              curl -fsS -o /dev/null "$index_url"
+              curl -fsS -o /dev/null "$package_url"
+              # Rotate the initial admin password into the provisioned secret.
+              if "$initial_password"; then
+                code=$(curl --config "$auth" -sS -o /dev/null -w '%{http_code}' -X PUT -H 'Content-Type: text/plain' --data-binary @/opt/nexus-bootstrap-secrets/admin-password "$base/service/rest/v1/security/users/admin/change-password")
+                if test "$code" != 204; then
+                  echo "admin password change failed (HTTP $code)"
+                  exit 1
+                fi
+                attempts=0
+                while test -e /nexus-data/admin.password && test "$attempts" -lt 30; do
+                  sleep 1
+                  attempts=$((attempts + 1))
+                done
+              fi
+              ready
           readinessProbe:
             exec:
               command: ["/bin/sh", "-ec", "test -f /tmp/bootstrap-ready"]
