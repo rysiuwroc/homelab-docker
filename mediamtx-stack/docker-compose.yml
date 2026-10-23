@@ -4,7 +4,7 @@ name: mediamtx-stack
 
 services:
   mediamtx:
-    image: bluenviron/mediamtx:1.15.5
+    image: bluenviron/mediamtx:1.21.2
     container_name: mediamtx
     restart: unless-stopped
     environment:
