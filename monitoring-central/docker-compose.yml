@@ -16,7 +16,7 @@ volumes:
     name: monitoring_loki-data
 
 x-exportarr: &exportarr
-  image: ghcr.io/onedr0p/exportarr:v2.0.1
+  image: ghcr.io/onedr0p/exportarr:v2.3.0
   restart: unless-stopped
   networks: [monitoring]
   environment:
@@ -24,7 +24,7 @@ x-exportarr: &exportarr
 
 services:
   prometheus:
-    image: prom/prometheus:v3.5.4
+    image: prom/prometheus:v3.15.1
     container_name: prometheus
     command:
       - --config.file=/etc/prometheus/prometheus.yml
@@ -50,7 +50,7 @@ services:
       start_period: 30s
 
   grafana:
-    image: grafana/grafana:12.3.7
+    image: grafana/grafana:13.2.4
     container_name: grafana
     environment:
       - TZ=Europe/Warsaw
@@ -86,7 +86,7 @@ services:
     restart: unless-stopped
 
   cadvisor:
-    image: gcr.io/cadvisor/cadvisor:v0.55.1
+    image: ghcr.io/google/cadvisor:v0.60.6
     container_name: cadvisor
     privileged: true
     devices:
@@ -142,7 +142,7 @@ services:
     networks: [monitoring]
 
   blackbox-exporter:
-    image: prom/blackbox-exporter:v0.25.0
+    image: prom/blackbox-exporter:v0.29.1
     container_name: blackbox-exporter
     restart: unless-stopped
     cap_add:
@@ -154,7 +154,7 @@ services:
     networks: [monitoring]
 
   loki:
-    image: grafana/loki:3.7.6
+    image: grafana/loki:3.7.9
     container_name: loki
     volumes:
       - /home/rysiu/monitoring/loki-config.yaml:/etc/loki/local-config.yaml:ro
