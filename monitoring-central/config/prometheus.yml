@@ -69,14 +69,6 @@ scrape_configs:
     static_configs:
       - targets: ["adguard-exporter:9617"]
         labels: {host: router, service: adguard}
-  - job_name: node-homeserver
-    static_configs:
-      - targets: ["192.168.0.69:9182"]
-        labels: {host: homeserver, ip: "192.168.0.69"}
-    metric_relabel_configs:
-      - source_labels: [__name__]
-        regex: windows_service_.*
-        action: drop
   - job_name: cake
     scrape_interval: 10s
     metrics_path: /cgi-bin/cake
