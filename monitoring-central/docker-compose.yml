@@ -14,6 +14,9 @@ volumes:
   loki-data:
     external: true
     name: monitoring_loki-data
+  uptime-kuma:
+    external: true
+    name: uptime-kuma
 
 x-exportarr: &exportarr
   image: ghcr.io/onedr0p/exportarr:v2.0.1
@@ -73,6 +76,21 @@ services:
       timeout: 10s
       retries: 3
       start_period: 60s
+
+  # Uptime Kuma moved here from .212 (2026-10-27) so it no longer dies with the host it watches.
+  # All monitors target LAN IPs/hostnames; the docker-socket monitors were dropped (cAdvisor + Grafana
+  # "Docker Host: Container Missing" cover container presence on .212).
+  uptime-kuma:
+    image: louislam/uptime-kuma:2
+    container_name: uptime-kuma
+    environment:
+      - TZ=Europe/Warsaw
+    volumes:
+      - uptime-kuma:/app/data
+    ports:
+      - "3001:3001"
+    restart: unless-stopped
+    networks: [monitoring]
 
   node-exporter:
     image: prom/node-exporter:v1

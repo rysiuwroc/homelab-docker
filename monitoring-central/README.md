@@ -16,8 +16,13 @@ cd /home/rysiu/monitoring && docker compose up -d
 
 | Host | Co tam stoi | Dlaczego |
 | --- | --- | --- |
-| `mon-01` (`.30`) | prometheus, grafana, loki, exportarr-*, adguard, blackbox | centrala - nie moze umierac razem z mierzonym hostem |
+| `mon-01` (`.30`) | prometheus, grafana, loki, exportarr-*, adguard, blackbox, **uptime-kuma** (`:3001`) | centrala - nie moze umierac razem z mierzonym hostem |
 | `.212` | node-exporter, cadvisor, alloy | agenty - musza byc na mierzonym hoscie |
+
+Uptime Kuma przeniesiona z `.212` 2026-10-27 (wolumen `uptime-kuma`, external). Monitory
+typu `docker` (przez docker-socket-proxy na `.212`) usuniete - obecnosc kontenerow pilnuje
+cAdvisor + alert Grafany `Docker Host: Container Missing`. Gdy pada caly `pve`, milknie tez
+mon-01 (Kuma, Grafana, Prometheus) - to wymaga zewnetrznego dead-man switcha.
 
 Exportery `arr` moglyby stac gdziekolwiek: celuja w `http://192.168.0.212:PORT` po IP,
 nie po nazwie kontenera.
