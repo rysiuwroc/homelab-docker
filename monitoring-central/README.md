@@ -22,7 +22,8 @@ cd /home/rysiu/monitoring && docker compose up -d
 Uptime Kuma przeniesiona z `.212` 2026-10-27 (wolumen `uptime-kuma`, external). Monitory
 typu `docker` (przez docker-socket-proxy na `.212`) usuniete - obecnosc kontenerow pilnuje
 cAdvisor + alert Grafany `Docker Host: Container Missing`. Gdy pada caly `pve`, milknie tez
-mon-01 (Kuma, Grafana, Prometheus) - to wymaga zewnetrznego dead-man switcha.
+mon-01 (Kuma, Grafana, Prometheus). Zewnetrzny sygnal daje wtedy tylko heartbeat z `.212`:
+cron `rysiu` pinguje Healthchecks.io co minute, wiec brak pingu = docker-host (lub caly pve) lezy.
 
 Exportery `arr` moglyby stac gdziekolwiek: celuja w `http://192.168.0.212:PORT` po IP,
 nie po nazwie kontenera.
