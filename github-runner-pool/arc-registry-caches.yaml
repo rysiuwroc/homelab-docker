@@ -44,7 +44,7 @@ spec:
     spec:
       containers:
         - name: registry
-          image: registry:2.8.3
+          image: registry:3.1.2
           args: [serve, /etc/docker/registry/config.yml]
           ports:
             - containerPort: 5000
@@ -102,7 +102,7 @@ spec:
     spec:
       containers:
         - name: registry
-          image: registry:2.8.3
+          image: registry:3.1.2
           ports:
             - containerPort: 5000
           volumeMounts:
@@ -142,7 +142,7 @@ spec:
           restartPolicy: OnFailure
           containers:
             - name: sync
-              image: quay.io/skopeo/stable:v1.15.2
+              image: quay.io/skopeo/stable:v1.22.3
               args:
                 - copy
                 - --all

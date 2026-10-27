@@ -28,7 +28,7 @@ x-arr-common: &arr-common
 services:
   prowlarr:
     <<: *arr-common
-    image: lscr.io/linuxserver/prowlarr:2.5.2.5491-ls156
+    image: lscr.io/linuxserver/prowlarr:2.6.5.5623-ls165
     container_name: prowlarr
     volumes:
       - prowlarr_config:/config
@@ -96,7 +96,7 @@ services:
   # autobrr: IRC grabber for PolishTracker -> pushes movies/TV to Radarr/Sonarr (ratio: first-in-swarm).
   #   Config (config.toml + SQLite) in autobrr_config volume; PT secrets entered in autobrr UI, NOT git.
   autobrr:
-    image: ghcr.io/autobrr/autobrr:v1.81.0
+    image: ghcr.io/autobrr/autobrr:v1.89.0
     container_name: autobrr
     restart: unless-stopped
     # runs as root (image default): autobrr has no LSIO chown-init, so it must own /config to write config.toml
@@ -114,7 +114,7 @@ services:
   # cleanuparr: queue-cleaner (replaces decluttarr). All rule config via web UI/SQLite in the volume.
   #   NO /data mount on purpose (orphan/unlinked file deletion structurally impossible = seed-safe).
   cleanuparr:
-    image: ghcr.io/cleanuparr/cleanuparr:2.9.15
+    image: ghcr.io/cleanuparr/cleanuparr:2.10.12
     container_name: cleanuparr
     restart: unless-stopped
     networks: [arr_net]
