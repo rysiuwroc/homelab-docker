@@ -2,7 +2,7 @@
 
 Farmer punktów bonusowych **PolishTrackera**. Seeduje dużo małych, rzadkich,
 starszych torrentów (filmy/seriale + gry/konsole) w dedykowanej kategorii qBit
-`points` na F: (media-f), seed-only (nie importowane do Plex/Jellyfin).
+`points` na F: (media-f), seed-only (nie importowane do Plexa).
 
 ## Dlaczego tak (wzór punktów PT)
 
