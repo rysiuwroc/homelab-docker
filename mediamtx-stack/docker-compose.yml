@@ -14,6 +14,10 @@ services:
       # 2 lines/min of RTSP open/close chatter from uptime-kuma's TCP-port monitor;
       # warn keeps only real errors (MTX_LOGLEVEL maps to config logLevel).
       MTX_LOGLEVEL: "warn"
+      # The iPhone publishes 2160x3840 H.264 at ~64 Mb/s; one keyframe is thousands of RTP packets.
+      # The default writeQueueSize (512) overflows on every keyframe and MediaMTX drops ~200 frames
+      # per reader ("reader is too slow"), corrupting every consumer. Must be a power of two.
+      MTX_WRITEQUEUESIZE: "16384"
     volumes:
       # mediamtx is a scratch image (no tzdata) — mount host zoneinfo so TZ resolves (logs -> CEST)
       - /usr/share/zoneinfo:/usr/share/zoneinfo:ro
