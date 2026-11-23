@@ -35,7 +35,7 @@ template:
     priorityClassName: ci-runners
     initContainers:
       - name: init-dind-externals
-        image: local/arc-ci-runner:2026-07-26
+        image: local/arc-ci-runner:2026-11-13
         imagePullPolicy: Never
         command: ["cp", "-r", "/home/runner/externals/.", "/home/runner/tmpDir/"]
         resources:
@@ -95,7 +95,7 @@ template:
             mountPath: /var/lib/docker
     containers:
       - name: runner
-        image: local/arc-ci-runner:2026-07-26
+        image: local/arc-ci-runner:2026-11-13
         imagePullPolicy: Never
         command: ["/home/runner/run.sh"]
         env:

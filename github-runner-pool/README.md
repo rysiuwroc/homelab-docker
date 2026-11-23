@@ -209,6 +209,24 @@ sudo k3s kubectl -n arc-systems get pod -l app.kubernetes.io/component=runner-sc
 
 `get endpoints` must print exactly one address on port `8080`, and the container port name must be `metrics`, since the Service targets the port by name, not by number. `kubectl apply --dry-run=server` reports all three objects `unchanged` when the cluster matches this file — unlike `arc-priority-classes.yaml` above, whose documented `configured` artifact does not apply here.
 
+## ARC runner image refresh
+
+`local/arc-ci-runner` is imported into K3s containerd (`imagePullPolicy: Never`). GitHub stops serving deprecated runner releases: the runner then logs `Runner version vX is deprecated and cannot receive messages`, exits with code 7, and ARC marks the scale set `Outdated`, deletes the listener and stays idle (listener Prometheus target `503`). Refresh only the runner binaries with `arc-runner-refresh.Dockerfile` (bump `RUNNER_VERSION` and the `linux-x64` SHA from the release notes). There is no Docker on `ci-k3s-01`, so build on `docker-host` and move the image as a file; piping it through a Windows shell stalls:
+
+```bash
+# ci-k3s-01
+sudo k3s ctr -n k8s.io images export /tmp/base.tar docker.io/local/arc-ci-runner:<old-tag>
+# workstation: scp -3 rysiu@192.168.0.66:/tmp/base.tar rysiu@192.168.0.212:~/base.tar
+# docker-host
+docker load -i ~/base.tar
+docker build -t local/arc-ci-runner:<new-tag> -f arc-runner-refresh.Dockerfile .
+docker save local/arc-ci-runner:<new-tag> -o ~/new.tar
+# workstation: scp -3 back to ci-k3s-01, then on ci-k3s-01
+sudo k3s ctr -n k8s.io images import --digests=true /tmp/new.tar
+```
+
+Do not `chown -R /home/runner` in that Dockerfile: it copies the whole Rust toolchain into a new layer and saturated `docker-host` I/O. Then set the new tag in `arc-runner-values.yaml` and run the Helm upgrade below; the spec change makes ARC recreate the scale set.
+
 ## ARC runner image prewarm
 
 `arc-runner-values.yaml` prewarms the exact `.NET API tests` job-container and service-container image references — `registry-mcr-images.arc-runners.svc.cluster.local:5000/dotnet/sdk:10.0` and `postgres:17-alpine` — in parallel in each new runner's private DinD store before that runner registers. Its DinD graph uses a per-runner node-backed `emptyDir` mounted at `/var/lib/docker`, avoiding nested writable-layer copy-on-write while retaining ephemeral runner isolation. The prewarm is best-effort: a registry failure is logged but never prevents runner registration; GitHub Actions will then pull the image in the job as usual.
