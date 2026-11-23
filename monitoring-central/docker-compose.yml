@@ -62,6 +62,11 @@ services:
       - GF_USERS_ALLOW_SIGN_UP=false
       - GF_ANALYTICS_REPORTING_ENABLED=false
       - GF_ANALYTICS_CHECK_FOR_UPDATES=false
+      # WAL: without it a write to grafana.db locks out readers (SQLITE_BUSY); during the nightly pve
+      # backup every alert rule then failed to load its datasource and Telegram got "DatasourceError".
+      # The official image uses the CGO-free SQLite driver, which ignores this setting (grafana#127893),
+      # so grafana.db was also switched once with `PRAGMA journal_mode=WAL` (persists in the file).
+      - GF_DATABASE_WAL=true
     volumes:
       - grafana-data:/var/lib/grafana
       - /home/rysiu/monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
@@ -70,6 +75,13 @@ services:
     depends_on: [prometheus]
     restart: unless-stopped
     networks: [monitoring]
+    # Bounded log: the unrotated json log reached 23 MB and an unclean shutdown left NUL bytes in it,
+    # after which `docker logs` silently stopped reading (2026-09-06).
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "3"
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS -o /dev/null http://localhost:3000/api/health"]
       interval: 30s
