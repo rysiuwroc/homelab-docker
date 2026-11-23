@@ -1,6 +1,6 @@
 # Source of truth: homelab-docker/monitoring-stack/config/loki-config.yaml.
 # Do not edit on the host — edit in git and run monitoring-stack/apply-config.sh.
-# grafana/loki:3.7.9, single binary (-target=all), filesystem storage, retencja wymuszona.
+# grafana/loki:3.7.10, single binary (-target=all), filesystem storage, retencja wymuszona.
 auth_enabled: false
 server:
   # 3.7.9 loguje KAZDE zapytanie na info (metrics.go:285 / engine.go:274, bez progu w schema) —

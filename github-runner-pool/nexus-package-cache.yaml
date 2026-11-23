@@ -30,7 +30,7 @@ spec:
         fsGroup: 200
       containers:
         - name: nexus
-          image: sonatype/nexus3@sha256:5a90cc609f47d1461282a314fbb78906a5d84c8961d515902e46e357c7278471
+          image: sonatype/nexus3@sha256:91a9af44af777c353db11a5ee73850c7eb24b03c997ff4cc62a3500ad38a1332
           ports:
             - containerPort: 8081
           env:
@@ -63,7 +63,7 @@ spec:
             - name: data
               mountPath: /nexus-data
         - name: bootstrap
-          image: sonatype/nexus3@sha256:5a90cc609f47d1461282a314fbb78906a5d84c8961d515902e46e357c7278471
+          image: sonatype/nexus3@sha256:91a9af44af777c353db11a5ee73850c7eb24b03c997ff4cc62a3500ad38a1332
           command: ["/bin/sh", "-ec"]
           args:
             - |

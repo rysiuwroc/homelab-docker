@@ -142,7 +142,7 @@ spec:
           restartPolicy: OnFailure
           containers:
             - name: sync
-              image: quay.io/skopeo/stable:v1.22.3
+              image: quay.io/skopeo/stable:v1.25.1
               args:
                 - copy
                 - --all
